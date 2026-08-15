@@ -32,11 +32,41 @@ public class UserService {
         return userRepository.findByEmail(email);
     }
 
+    // CREATE USER
     public User saveUser(User user) {
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        user.setPassword(
+                passwordEncoder.encode(user.getPassword())
+        );
+
         return userRepository.save(user);
     }
 
+    // UPDATE USER
+    public Optional<User> updateUser(Long id, User updatedUser) {
+
+        return userRepository.findById(id)
+                .map(existingUser -> {
+
+                    existingUser.setName(updatedUser.getName());
+                    existingUser.setEmail(updatedUser.getEmail());
+                    existingUser.setRole(updatedUser.getRole());
+
+                    // Update password only when a new password is provided
+                    if (updatedUser.getPassword() != null
+                            && !updatedUser.getPassword().isBlank()) {
+
+                        existingUser.setPassword(
+                                passwordEncoder.encode(
+                                        updatedUser.getPassword()
+                                )
+                        );
+                    }
+
+                    return userRepository.save(existingUser);
+                });
+    }
+
+    // DELETE USER
     public void deleteUser(Long id) {
         userRepository.deleteById(id);
     }
