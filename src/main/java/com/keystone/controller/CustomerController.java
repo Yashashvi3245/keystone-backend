@@ -34,6 +34,30 @@ public class CustomerController {
         return customerService.saveCustomer(customer);
     }
 
+    // UPDATE CUSTOMER
+    @PutMapping("/{id}")
+    public ResponseEntity<Customer> updateCustomer(
+            @PathVariable Long id,
+            @RequestBody Customer updatedCustomer) {
+
+        return customerService.getCustomerById(id)
+                .map(existingCustomer -> {
+
+                    existingCustomer.setCompanyName(
+                            updatedCustomer.getCompanyName()
+                    );
+
+                    existingCustomer.setContactEmail(
+                            updatedCustomer.getContactEmail()
+                    );
+
+                    return ResponseEntity.ok(
+                            customerService.saveCustomer(existingCustomer)
+                    );
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCustomer(@PathVariable Long id) {
         customerService.deleteCustomer(id);
