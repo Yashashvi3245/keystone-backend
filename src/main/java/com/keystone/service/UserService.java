@@ -41,14 +41,11 @@ public class UserService {
     public User saveUser(User user) {
 
         user.setPassword(
-                passwordEncoder.encode(user.getPassword())
+                passwordEncoder.encode(
+                        user.getPassword()
+                )
         );
 
-        return userRepository.save(user);
-    }
-
-    // SAVE EXISTING USER
-    public User saveExistingUser(User user) {
         return userRepository.save(user);
     }
 
@@ -72,8 +69,7 @@ public class UserService {
                             updatedUser.getRole()
                     );
 
-                    // Password tabhi update karo
-                    // jab new password diya gaya ho
+                    // Password update only when provided
                     if (updatedUser.getPassword() != null
                             && !updatedUser.getPassword().isBlank()) {
 
@@ -84,7 +80,9 @@ public class UserService {
                         );
                     }
 
-                    return userRepository.save(existingUser);
+                    return userRepository.save(
+                            existingUser
+                    );
                 });
     }
 
