@@ -14,26 +14,32 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository,
-                       PasswordEncoder passwordEncoder) {
+    public UserService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder) {
+
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
+    // GET ALL USERS
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
 
+    // GET USER BY ID
     public Optional<User> getUserById(Long id) {
         return userRepository.findById(id);
     }
 
+    // GET USER BY EMAIL
     public Optional<User> getUserByEmail(String email) {
         return userRepository.findByEmail(email);
     }
 
     // CREATE USER
     public User saveUser(User user) {
+
         user.setPassword(
                 passwordEncoder.encode(user.getPassword())
         );
@@ -41,17 +47,33 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    // SAVE EXISTING USER
+    public User saveExistingUser(User user) {
+        return userRepository.save(user);
+    }
+
     // UPDATE USER
-    public Optional<User> updateUser(Long id, User updatedUser) {
+    public Optional<User> updateUser(
+            Long id,
+            User updatedUser) {
 
         return userRepository.findById(id)
                 .map(existingUser -> {
 
-                    existingUser.setName(updatedUser.getName());
-                    existingUser.setEmail(updatedUser.getEmail());
-                    existingUser.setRole(updatedUser.getRole());
+                    existingUser.setName(
+                            updatedUser.getName()
+                    );
 
-                    // Update password only when a new password is provided
+                    existingUser.setEmail(
+                            updatedUser.getEmail()
+                    );
+
+                    existingUser.setRole(
+                            updatedUser.getRole()
+                    );
+
+                    // Password tabhi update karo
+                    // jab new password diya gaya ho
                     if (updatedUser.getPassword() != null
                             && !updatedUser.getPassword().isBlank()) {
 

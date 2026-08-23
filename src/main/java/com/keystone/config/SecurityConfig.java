@@ -31,14 +31,14 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
-
-                        // Login public rahega
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // User APIs ke liye JWT required
+                        // Work Orders public for now
+                        .requestMatchers("/api/work-orders/**").permitAll()
+
+                        // Users require JWT
                         .requestMatchers("/api/users/**").authenticated()
 
-                        // Baaki API फिलहाल public
                         .requestMatchers("/api/**").permitAll()
 
                         .anyRequest().authenticated()

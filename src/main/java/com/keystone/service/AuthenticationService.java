@@ -22,16 +22,45 @@ public class AuthenticationService {
         this.jwtService = jwtService;
     }
 
+    // LOGIN
     public String login(String email, String password) {
 
         User user = userService.getUserByEmail(email)
                 .orElseThrow(() ->
-                        new RuntimeException("Invalid email or password"));
+                        new RuntimeException(
+                                "Invalid email or password"
+                        )
+                );
 
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new RuntimeException("Invalid email or password");
+        if (!passwordEncoder.matches(
+                password,
+                user.getPassword())) {
+
+            throw new RuntimeException(
+                    "Invalid email or password"
+            );
         }
 
-        return jwtService.generateToken(user.getEmail());
+        return jwtService.generateToken(
+                user.getEmail()
+        );
+    }
+
+    // TEMPORARY TEST PASSWORD RESET
+    public void resetTestPassword() {
+
+        User user = userService
+                .getUserByEmail("testuser@example.com")
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Test user not found"
+                        )
+                );
+
+        user.setPassword(
+                passwordEncoder.encode("Test@123")
+        );
+
+        userService.saveExistingUser(user);
     }
 }

@@ -10,7 +10,9 @@ public class AuthController {
 
     private final AuthenticationService authenticationService;
 
-    public AuthController(AuthenticationService authenticationService) {
+    public AuthController(
+            AuthenticationService authenticationService) {
+
         this.authenticationService = authenticationService;
     }
 
@@ -23,7 +25,20 @@ public class AuthController {
                 request.password()
         );
 
-        return ResponseEntity.ok(new LoginResponse(token));
+        return ResponseEntity.ok(
+                new LoginResponse(token)
+        );
+    }
+
+    // TEMPORARY: reset test user password
+    @GetMapping("/reset-test-password")
+    public ResponseEntity<String> resetTestPassword() {
+
+        authenticationService.resetTestPassword();
+
+        return ResponseEntity.ok(
+                "Test password reset successfully"
+        );
     }
 
     public record LoginRequest(
