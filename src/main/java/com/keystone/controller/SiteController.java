@@ -2,7 +2,10 @@ package com.keystone.controller;
 
 import com.keystone.model.Site;
 import com.keystone.service.SiteService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,53 +20,78 @@ public class SiteController {
         this.siteService = siteService;
     }
 
-    // GET all sites
+    // =========================
+    // GET ALL SITES
+    // =========================
     @GetMapping("/sites")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
     public List<Site> getAllSites() {
         return siteService.getAllSites();
     }
 
-    // GET site by ID
+    // =========================
+    // GET SITE BY ID
+    // =========================
     @GetMapping("/sites/{id}")
-    public ResponseEntity<Site> getSiteById(@PathVariable Long id) {
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
+    public ResponseEntity<Site> getSiteById(
+            @PathVariable Long id) {
+
         return siteService.getSiteById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // GET all sites for a customer
+    // =========================
+    // GET CUSTOMER SITES
+    // =========================
     @GetMapping("/customers/{customerId}/sites")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
     public List<Site> getSitesByCustomer(
             @PathVariable Long customerId) {
 
         return siteService.getSitesByCustomerId(customerId);
     }
 
-    // CREATE site for a customer
+    // =========================
+    // CREATE SITE
+    // =========================
     @PostMapping("/customers/{customerId}/sites")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
     public ResponseEntity<Site> createSite(
             @PathVariable Long customerId,
-            @RequestBody Site site) {
+            @Valid @RequestBody Site site) {
 
         return siteService.createSite(customerId, site)
-                .map(ResponseEntity::ok)
+                .map(createdSite ->
+                        ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(createdSite)
+                )
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // UPDATE site
+    // =========================
+    // UPDATE SITE
+    // =========================
     @PutMapping("/sites/{id}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
     public ResponseEntity<Site> updateSite(
             @PathVariable Long id,
-            @RequestBody Site updatedSite) {
+            @Valid @RequestBody Site updatedSite) {
 
         return siteService.updateSite(id, updatedSite)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // DELETE site
+    // =========================
+    // DELETE SITE
+    // =========================
     @DeleteMapping("/sites/{id}")
-    public ResponseEntity<Void> deleteSite(@PathVariable Long id) {
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
+    public ResponseEntity<Void> deleteSite(
+            @PathVariable Long id) {
 
         if (!siteService.deleteSite(id)) {
             return ResponseEntity.notFound().build();

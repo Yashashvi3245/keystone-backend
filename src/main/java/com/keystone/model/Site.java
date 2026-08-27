@@ -1,6 +1,7 @@
 package com.keystone.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 
 @Entity
 @Table(name = "sites")
@@ -10,18 +11,23 @@ public class Site {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank(message = "Site name is required")
     @Column(nullable = false)
     private String name;
 
+    @NotBlank(message = "Address is required")
     @Column(nullable = false)
     private String address;
 
+    @NotBlank(message = "City is required")
     @Column(nullable = false)
     private String city;
 
+    @NotBlank(message = "State is required")
     @Column(nullable = false)
     private String state;
 
+    @NotBlank(message = "Postal code is required")
     @Column(nullable = false)
     private String postalCode;
 
@@ -32,8 +38,14 @@ public class Site {
     public Site() {
     }
 
-    public Site(String name, String address, String city,
-                String state, String postalCode, Customer customer) {
+    public Site(
+            String name,
+            String address,
+            String city,
+            String state,
+            String postalCode,
+            Customer customer) {
+
         this.name = name;
         this.address = address;
         this.city = city;

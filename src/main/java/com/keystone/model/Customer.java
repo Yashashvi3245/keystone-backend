@@ -1,6 +1,8 @@
 package com.keystone.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 
 @Entity
 @Table(name = "customers")
@@ -10,9 +12,12 @@ public class Customer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank(message = "Company name is required")
     @Column(nullable = false)
     private String companyName;
 
+    @NotBlank(message = "Contact email is required")
+    @Email(message = "Invalid email format")
     @Column(nullable = false, unique = true)
     private String contactEmail;
 
