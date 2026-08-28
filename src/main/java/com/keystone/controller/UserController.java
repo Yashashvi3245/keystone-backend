@@ -40,18 +40,8 @@ public class UserController {
             @PathVariable Long id,
             @RequestBody User updatedUser) {
 
-        return userService.getUserById(id)
-                .map(existingUser -> {
-
-                    existingUser.setName(updatedUser.getName());
-                    existingUser.setEmail(updatedUser.getEmail());
-                    existingUser.setPassword(updatedUser.getPassword());
-                    existingUser.setRole(updatedUser.getRole());
-
-                    return ResponseEntity.ok(
-                            userService.saveUser(existingUser)
-                    );
-                })
+        return userService.updateUser(id, updatedUser)
+                .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 

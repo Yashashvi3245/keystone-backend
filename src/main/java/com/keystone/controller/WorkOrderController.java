@@ -1,8 +1,12 @@
 package com.keystone.controller;
 
-import com.keystone.model.WorkOrder;
+import com.keystone.dto.WorkOrderRequest;
+import com.keystone.dto.WorkOrderResponse;
 import com.keystone.service.WorkOrderService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,50 +21,84 @@ public class WorkOrderController {
         this.workOrderService = workOrderService;
     }
 
+    // =========================
+    // GET ALL WORK ORDERS
+    // MANAGER / DISPATCHER / TECHNICIAN
+    // =========================
     @GetMapping
-    public List<WorkOrder> getAllWorkOrders() {
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
+    public List<WorkOrderResponse> getAllWorkOrders() {
         return workOrderService.getAllWorkOrders();
     }
 
+    // =========================
+    // GET WORK ORDER BY ID
+    // MANAGER / DISPATCHER / TECHNICIAN
+    // =========================
     @GetMapping("/{id}")
-    public ResponseEntity<WorkOrder> getWorkOrderById(
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
+    public ResponseEntity<WorkOrderResponse> getWorkOrderById(
             @PathVariable Long id) {
 
-        return workOrderService.getWorkOrderById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        try {
+            return ResponseEntity.ok(
+                    workOrderService.getWorkOrderById(id)
+            );
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
+    // =========================
+    // GET WORK ORDER BY CODE
+    // MANAGER / DISPATCHER / TECHNICIAN
+    // =========================
     @GetMapping("/code/{code}")
-    public ResponseEntity<WorkOrder> getWorkOrderByCode(
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
+    public ResponseEntity<WorkOrderResponse> getWorkOrderByCode(
             @PathVariable String code) {
 
-        return workOrderService.getWorkOrderByCode(code)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        try {
+            return ResponseEntity.ok(
+                    workOrderService.getWorkOrderByCode(code)
+            );
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
+    // =========================
+    // CREATE WORK ORDER
+    // MANAGER / DISPATCHER ONLY
+    // =========================
     @PostMapping
-    public WorkOrder createWorkOrder(
-            @RequestBody WorkOrder workOrder,
-            @RequestParam Long customerId,
-            @RequestParam Long siteId,
-            @RequestParam(required = false) Long assigneeId) {
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
+    public ResponseEntity<WorkOrderResponse> createWorkOrder(
+            @Valid @RequestBody WorkOrderRequest request) {
 
-        return workOrderService.createWorkOrder(
-                workOrder,
-                customerId,
-                siteId,
-                assigneeId
-        );
+        WorkOrderResponse response =
+                workOrderService.createWorkOrder(request);
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
     }
 
+    // =========================
+    // DELETE WORK ORDER
+    // MANAGER ONLY
+    // =========================
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<Void> deleteWorkOrder(
             @PathVariable Long id) {
 
-        workOrderService.deleteWorkOrder(id);
+        try {
+            workOrderService.deleteWorkOrder(id);
+            return ResponseEntity.noContent().build();
 
-        return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }
