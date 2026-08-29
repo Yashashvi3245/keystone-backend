@@ -6,6 +6,7 @@ import com.keystone.model.Customer;
 import com.keystone.model.Site;
 import com.keystone.model.User;
 import com.keystone.model.WorkOrder;
+import com.keystone.model.WorkOrderStatus;
 import com.keystone.repository.CustomerRepository;
 import com.keystone.repository.SiteRepository;
 import com.keystone.repository.UserRepository;
@@ -34,7 +35,9 @@ public class WorkOrderService {
         this.userRepository = userRepository;
     }
 
+    // =========================
     // GET ALL WORK ORDERS
+    // =========================
     public List<WorkOrderResponse> getAllWorkOrders() {
 
         return workOrderRepository.findAll()
@@ -43,7 +46,9 @@ public class WorkOrderService {
                 .toList();
     }
 
+    // =========================
     // GET WORK ORDER BY ID
+    // =========================
     public WorkOrderResponse getWorkOrderById(Long id) {
 
         WorkOrder workOrder = workOrderRepository.findById(id)
@@ -53,7 +58,9 @@ public class WorkOrderService {
         return toResponse(workOrder);
     }
 
+    // =========================
     // GET WORK ORDER BY CODE
+    // =========================
     public WorkOrderResponse getWorkOrderByCode(String code) {
 
         WorkOrder workOrder = workOrderRepository.findByCode(code)
@@ -63,7 +70,9 @@ public class WorkOrderService {
         return toResponse(workOrder);
     }
 
+    // =========================
     // CREATE WORK ORDER
+    // =========================
     public WorkOrderResponse createWorkOrder(
             WorkOrderRequest request) {
 
@@ -77,7 +86,7 @@ public class WorkOrderService {
                 .orElseThrow(() ->
                         new RuntimeException("Site not found"));
 
-        // Make sure site belongs to selected customer
+        // Site must belong to selected customer
         if (!site.getCustomer().getId()
                 .equals(customer.getId())) {
 
@@ -96,6 +105,7 @@ public class WorkOrderService {
         workOrder.setCustomer(customer);
         workOrder.setSite(site);
 
+        // Optional assignee
         if (request.assigneeId() != null) {
 
             User assignee = userRepository
@@ -106,6 +116,7 @@ public class WorkOrderService {
                             ));
 
             workOrder.setAssignee(assignee);
+            workOrder.setStatus(WorkOrderStatus.ASSIGNED);
         }
 
         WorkOrder savedWorkOrder =
@@ -114,7 +125,120 @@ public class WorkOrderService {
         return toResponse(savedWorkOrder);
     }
 
+    // =========================
+    // UPDATE WORK ORDER
+    // =========================
+    public WorkOrderResponse updateWorkOrder(
+            Long id,
+            WorkOrderRequest request) {
+
+        WorkOrder workOrder = workOrderRepository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Work order not found"));
+
+        Customer customer = customerRepository
+                .findById(request.customerId())
+                .orElseThrow(() ->
+                        new RuntimeException("Customer not found"));
+
+        Site site = siteRepository
+                .findById(request.siteId())
+                .orElseThrow(() ->
+                        new RuntimeException("Site not found"));
+
+        // Site must belong to selected customer
+        if (!site.getCustomer().getId()
+                .equals(customer.getId())) {
+
+            throw new RuntimeException(
+                    "Site does not belong to selected customer"
+            );
+        }
+
+        workOrder.setTitle(request.title());
+        workOrder.setDescription(request.description());
+        workOrder.setPriority(request.priority());
+        workOrder.setSlaDueDate(request.slaDueDate());
+        workOrder.setCustomer(customer);
+        workOrder.setSite(site);
+
+        // Update assignee if provided
+        if (request.assigneeId() != null) {
+
+            User assignee = userRepository
+                    .findById(request.assigneeId())
+                    .orElseThrow(() ->
+                            new RuntimeException(
+                                    "Assignee not found"
+                            ));
+
+            workOrder.setAssignee(assignee);
+
+            // Don't change completed/closed/cancelled status
+            if (workOrder.getStatus() == WorkOrderStatus.NEW) {
+                workOrder.setStatus(WorkOrderStatus.ASSIGNED);
+            }
+
+        } else {
+
+            workOrder.setAssignee(null);
+        }
+
+        WorkOrder updatedWorkOrder =
+                workOrderRepository.save(workOrder);
+
+        return toResponse(updatedWorkOrder);
+    }
+
+    // =========================
+    // UPDATE STATUS
+    // =========================
+    public WorkOrderResponse updateStatus(
+            Long id,
+            WorkOrderStatus status) {
+
+        WorkOrder workOrder = workOrderRepository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Work order not found"));
+
+        workOrder.setStatus(status);
+
+        WorkOrder updatedWorkOrder =
+                workOrderRepository.save(workOrder);
+
+        return toResponse(updatedWorkOrder);
+    }
+
+    // =========================
+    // ASSIGN WORK ORDER
+    // =========================
+    public WorkOrderResponse assignWorkOrder(
+            Long id,
+            Long assigneeId) {
+
+        WorkOrder workOrder = workOrderRepository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Work order not found"));
+
+        User assignee = userRepository.findById(assigneeId)
+                .orElseThrow(() ->
+                        new RuntimeException("Assignee not found"));
+
+        workOrder.setAssignee(assignee);
+
+        if (workOrder.getStatus() == WorkOrderStatus.NEW) {
+            workOrder.setStatus(WorkOrderStatus.ASSIGNED);
+        }
+
+        WorkOrder updatedWorkOrder =
+                workOrderRepository.save(workOrder);
+
+        return toResponse(updatedWorkOrder);
+    }
+
+    // =========================
     // DELETE WORK ORDER
+    // =========================
     public void deleteWorkOrder(Long id) {
 
         if (!workOrderRepository.existsById(id)) {
@@ -127,7 +251,9 @@ public class WorkOrderService {
         workOrderRepository.deleteById(id);
     }
 
-    // GENERATE HUMAN-READABLE WORK ORDER CODE
+    // =========================
+    // GENERATE WORK ORDER CODE
+    // =========================
     private String generateWorkOrderCode() {
 
         long nextNumber =
@@ -147,7 +273,9 @@ public class WorkOrderService {
         return code;
     }
 
+    // =========================
     // ENTITY → RESPONSE DTO
+    // =========================
     private WorkOrderResponse toResponse(
             WorkOrder workOrder) {
 

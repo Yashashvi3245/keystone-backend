@@ -2,6 +2,7 @@ package com.keystone.controller;
 
 import com.keystone.dto.WorkOrderRequest;
 import com.keystone.dto.WorkOrderResponse;
+import com.keystone.model.WorkOrderStatus;
 import com.keystone.service.WorkOrderService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -22,8 +23,7 @@ public class WorkOrderController {
     }
 
     // =========================
-    // GET ALL WORK ORDERS
-    // MANAGER / DISPATCHER / TECHNICIAN
+    // GET ALL
     // =========================
     @GetMapping
     @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
@@ -32,8 +32,7 @@ public class WorkOrderController {
     }
 
     // =========================
-    // GET WORK ORDER BY ID
-    // MANAGER / DISPATCHER / TECHNICIAN
+    // GET BY ID
     // =========================
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
@@ -50,8 +49,7 @@ public class WorkOrderController {
     }
 
     // =========================
-    // GET WORK ORDER BY CODE
-    // MANAGER / DISPATCHER / TECHNICIAN
+    // GET BY CODE
     // =========================
     @GetMapping("/code/{code}")
     @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
@@ -68,8 +66,7 @@ public class WorkOrderController {
     }
 
     // =========================
-    // CREATE WORK ORDER
-    // MANAGER / DISPATCHER ONLY
+    // CREATE
     // =========================
     @PostMapping
     @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
@@ -85,8 +82,64 @@ public class WorkOrderController {
     }
 
     // =========================
-    // DELETE WORK ORDER
-    // MANAGER ONLY
+    // UPDATE
+    // =========================
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
+    public ResponseEntity<WorkOrderResponse> updateWorkOrder(
+            @PathVariable Long id,
+            @Valid @RequestBody WorkOrderRequest request) {
+
+        try {
+            return ResponseEntity.ok(
+                    workOrderService.updateWorkOrder(id, request)
+            );
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // =========================
+    // UPDATE STATUS
+    // =========================
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
+    public ResponseEntity<WorkOrderResponse> updateStatus(
+            @PathVariable Long id,
+            @RequestParam WorkOrderStatus status) {
+
+        try {
+            return ResponseEntity.ok(
+                    workOrderService.updateStatus(id, status)
+            );
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // =========================
+    // ASSIGN WORK ORDER
+    // =========================
+    @PatchMapping("/{id}/assign")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
+    public ResponseEntity<WorkOrderResponse> assignWorkOrder(
+            @PathVariable Long id,
+            @RequestParam Long assigneeId) {
+
+        try {
+            return ResponseEntity.ok(
+                    workOrderService.assignWorkOrder(
+                            id,
+                            assigneeId
+                    )
+            );
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // =========================
+    // DELETE
     // =========================
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('MANAGER')")

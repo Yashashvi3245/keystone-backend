@@ -22,22 +22,30 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    // =========================
     // GET ALL USERS
+    // =========================
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
 
+    // =========================
     // GET USER BY ID
+    // =========================
     public Optional<User> getUserById(Long id) {
         return userRepository.findById(id);
     }
 
+    // =========================
     // GET USER BY EMAIL
+    // =========================
     public Optional<User> getUserByEmail(String email) {
         return userRepository.findByEmail(email);
     }
 
+    // =========================
     // CREATE USER
+    // =========================
     public User saveUser(User user) {
 
         user.setPassword(
@@ -49,7 +57,9 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    // =========================
     // UPDATE USER
+    // =========================
     public Optional<User> updateUser(
             Long id,
             User updatedUser) {
@@ -69,7 +79,7 @@ public class UserService {
                             updatedUser.getRole()
                     );
 
-                    // Password update only when provided
+                    // Update password only when provided
                     if (updatedUser.getPassword() != null
                             && !updatedUser.getPassword().isBlank()) {
 
@@ -86,7 +96,30 @@ public class UserService {
                 });
     }
 
+    // =========================
+    // TEMPORARY PASSWORD RESET
+    // =========================
+    public void resetPassword(
+            String email,
+            String newPassword) {
+
+        User user = userRepository
+                .findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "User not found"
+                        ));
+
+        user.setPassword(
+                passwordEncoder.encode(newPassword)
+        );
+
+        userRepository.save(user);
+    }
+
+    // =========================
     // DELETE USER
+    // =========================
     public void deleteUser(Long id) {
         userRepository.deleteById(id);
     }
