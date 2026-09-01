@@ -21,8 +21,10 @@ public class UserController {
     // GET ALL USERS
     // =========================
     @GetMapping
-    public List<User> getAllUsers() {
-        return userService.getAllUsers();
+    public ResponseEntity<List<User>> getAllUsers() {
+        return ResponseEntity.ok(
+                userService.getAllUsers()
+        );
     }
 
     // =========================
@@ -34,17 +36,21 @@ public class UserController {
 
         return userService.getUserById(id)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseGet(() ->
+                        ResponseEntity.notFound().build()
+                );
     }
 
     // =========================
     // CREATE USER
     // =========================
     @PostMapping
-    public User createUser(
+    public ResponseEntity<User> createUser(
             @RequestBody User user) {
 
-        return userService.saveUser(user);
+        return ResponseEntity.ok(
+                userService.saveUser(user)
+        );
     }
 
     // =========================
@@ -53,17 +59,20 @@ public class UserController {
     @PutMapping("/{id}")
     public ResponseEntity<User> updateUser(
             @PathVariable Long id,
-            @RequestBody User updatedUser) {
+            @RequestBody User user) {
 
-        return userService.updateUser(id, updatedUser)
+        return userService.updateUser(id, user)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseGet(() ->
+                        ResponseEntity.notFound().build()
+                );
     }
 
     // =========================
     // TEMPORARY PASSWORD RESET
+    // DEVELOPMENT / TESTING ONLY
     // =========================
-    @PutMapping("/reset-password")
+    @PostMapping("/reset-password")
     public ResponseEntity<String> resetPassword(
             @RequestParam String email,
             @RequestParam String newPassword) {
@@ -94,8 +103,17 @@ public class UserController {
     public ResponseEntity<Void> deleteUser(
             @PathVariable Long id) {
 
-        userService.deleteUser(id);
+        try {
 
-        return ResponseEntity.noContent().build();
+            userService.deleteUser(id);
+
+            return ResponseEntity.noContent().build();
+
+        } catch (RuntimeException e) {
+
+            return ResponseEntity
+                    .notFound()
+                    .build();
+        }
     }
 }

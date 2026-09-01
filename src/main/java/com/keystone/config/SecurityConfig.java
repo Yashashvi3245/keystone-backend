@@ -3,11 +3,17 @@ package com.keystone.config;
 import com.keystone.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
@@ -26,69 +32,133 @@ public class SecurityConfig {
             HttpSecurity http) throws Exception {
 
         http
-                // JWT based REST API ke liye CSRF disabled
+                // =========================
+                // CORS
+                // =========================
+                .cors(cors ->
+                        cors.configurationSource(
+                                corsConfigurationSource()
+                        )
+                )
+
+                // =========================
+                // CSRF
+                // =========================
                 .csrf(csrf -> csrf.disable())
 
-                // Session use nahi hogi
+                // =========================
+                // STATELESS SESSION
+                // =========================
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS
                         )
                 )
 
+                // =========================
+                // AUTHORIZATION
+                // =========================
                 .authorizeHttpRequests(auth -> auth
 
-                        // =========================
-                        // AUTHENTICATION
-                        // Login public hai
-                        // =========================
-                        .requestMatchers("/api/auth/**")
-                        .permitAll()
+                        // CORS preflight
+                        .requestMatchers(
+                                HttpMethod.OPTIONS,
+                                "/**"
+                        ).permitAll()
 
                         // =========================
-                        // CUSTOMERS
-                        // Customer APIs ke liye
-                        // JWT required
-                        // Actual role check @PreAuthorize karega
+                        // AUTH APIs - PUBLIC
                         // =========================
-                        .requestMatchers("/api/customers/**")
-                        .authenticated()
+                        .requestMatchers(
+                                "/api/auth/**"
+                        ).permitAll()
 
                         // =========================
-                        // SITES
-                        // Site APIs ke liye JWT required
+                        // CUSTOMERS - JWT REQUIRED
                         // =========================
-                        .requestMatchers("/api/sites/**")
-                        .authenticated()
+                        .requestMatchers(
+                                "/api/customers/**"
+                        ).authenticated()
 
                         // =========================
-                        // USERS
-                        // JWT required
+                        // SITES - JWT REQUIRED
                         // =========================
-                        .requestMatchers("/api/users/**")
-                        .authenticated()
+                        .requestMatchers(
+                                "/api/sites/**"
+                        ).authenticated()
 
                         // =========================
-                        // WORK ORDERS
-                        // Abhi Day 6 mein public
-                        // Day 7-8 mein properly secure karenge
+                        // USERS - JWT REQUIRED
                         // =========================
-                        .requestMatchers("/api/work-orders/**")
-                        .permitAll()
+                        .requestMatchers(
+                                "/api/users/**"
+                        ).authenticated()
 
                         // =========================
-                        // BAaki sab
+                        // WORK ORDERS - JWT REQUIRED
                         // =========================
-                        .anyRequest()
-                        .authenticated()
+                        .requestMatchers(
+                                "/api/work-orders/**"
+                        ).authenticated()
+
+                        // =========================
+                        // EVERYTHING ELSE
+                        // =========================
+                        .anyRequest().authenticated()
                 )
 
-                // JWT filter ko Spring Security chain mein add karo
+                // =========================
+                // JWT FILTER
+                // =========================
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
                 );
 
         return http.build();
+    }
+
+    // =====================================================
+    // CORS CONFIGURATION
+    // =====================================================
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+
+        CorsConfiguration configuration =
+                new CorsConfiguration();
+
+        configuration.setAllowedOrigins(
+                List.of(
+                        "http://localhost:5173"
+                )
+        );
+
+        configuration.setAllowedMethods(
+                List.of(
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "OPTIONS"
+                )
+        );
+
+        configuration.setAllowedHeaders(
+                List.of("*")
+        );
+
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration(
+                "/**",
+                configuration
+        );
+
+        return source;
     }
 }

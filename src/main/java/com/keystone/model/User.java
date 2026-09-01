@@ -1,6 +1,6 @@
 package com.keystone.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 
 @Entity
@@ -17,7 +17,7 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @JsonIgnore
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(nullable = false)
     private String password;
 
@@ -28,7 +28,12 @@ public class User {
     public User() {
     }
 
-    public User(String name, String email, String password, Role role) {
+    public User(
+            String name,
+            String email,
+            String password,
+            Role role) {
+
         this.name = name;
         this.email = email;
         this.password = password;
@@ -55,7 +60,6 @@ public class User {
         this.email = email;
     }
 
-    @JsonIgnore
     public String getPassword() {
         return password;
     }

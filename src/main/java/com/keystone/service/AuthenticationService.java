@@ -32,10 +32,23 @@ public class AuthenticationService {
                         )
                 );
 
-        if (!passwordEncoder.matches(
-                password,
-                user.getPassword())) {
+        // TEMPORARY DEBUG
+        System.out.println("================================");
+        System.out.println("EMAIL = " + user.getEmail());
+        System.out.println("HASH = " + user.getPassword());
 
+        boolean passwordMatch =
+                passwordEncoder.matches(
+                        password,
+                        user.getPassword()
+                );
+
+        System.out.println(
+                "PASSWORD MATCH = " + passwordMatch
+        );
+        System.out.println("================================");
+
+        if (!passwordMatch) {
             throw new RuntimeException(
                     "Invalid email or password"
             );
