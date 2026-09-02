@@ -1,6 +1,5 @@
 package com.keystone.config;
 
-import com.keystone.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -13,6 +12,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.keystone.security.JwtAuthenticationFilter;
+
 import java.util.List;
 
 @Configuration
@@ -23,7 +24,6 @@ public class SecurityConfig {
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter) {
-
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
@@ -32,32 +32,22 @@ public class SecurityConfig {
             HttpSecurity http) throws Exception {
 
         http
-                // =========================
-                // CORS
-                // =========================
                 .cors(cors ->
                         cors.configurationSource(
                                 corsConfigurationSource()
                         )
                 )
 
-                // =========================
-                // CSRF
-                // =========================
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf ->
+                        csrf.disable()
+                )
 
-                // =========================
-                // STATELESS SESSION
-                // =========================
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS
                         )
                 )
 
-                // =========================
-                // AUTHORIZATION
-                // =========================
                 .authorizeHttpRequests(auth -> auth
 
                         // CORS preflight
@@ -66,50 +56,41 @@ public class SecurityConfig {
                                 "/**"
                         ).permitAll()
 
-                        // =========================
-                        // AUTH APIs - PUBLIC
-                        // =========================
+                        // Login / authentication
                         .requestMatchers(
                                 "/api/auth/**"
                         ).permitAll()
 
-                        // =========================
-                        // CUSTOMERS - JWT REQUIRED
-                        // =========================
+                        // TEMPORARY:
+                        // password reset without token
                         .requestMatchers(
-                                "/api/customers/**"
-                        ).authenticated()
+                                "/api/users/reset-password"
+                        ).permitAll()
 
-                        // =========================
-                        // SITES - JWT REQUIRED
-                        // =========================
-                        .requestMatchers(
-                                "/api/sites/**"
-                        ).authenticated()
-
-                        // =========================
-                        // USERS - JWT REQUIRED
-                        // =========================
+                        // All other user APIs require login
                         .requestMatchers(
                                 "/api/users/**"
                         ).authenticated()
 
-                        // =========================
-                        // WORK ORDERS - JWT REQUIRED
-                        // =========================
+                        // Customer APIs
+                        .requestMatchers(
+                                "/api/customers/**"
+                        ).authenticated()
+
+                        // Site APIs
+                        .requestMatchers(
+                                "/api/sites/**"
+                        ).authenticated()
+
+                        // Work order APIs
                         .requestMatchers(
                                 "/api/work-orders/**"
                         ).authenticated()
 
-                        // =========================
-                        // EVERYTHING ELSE
-                        // =========================
+                        // Everything else
                         .anyRequest().authenticated()
                 )
 
-                // =========================
-                // JWT FILTER
-                // =========================
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
@@ -118,10 +99,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // =====================================================
-    // CORS CONFIGURATION
-    // =====================================================
-
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
 
@@ -129,9 +106,7 @@ public class SecurityConfig {
                 new CorsConfiguration();
 
         configuration.setAllowedOrigins(
-                List.of(
-                        "http://localhost:5173"
-                )
+                List.of("http://localhost:5173")
         );
 
         configuration.setAllowedMethods(
