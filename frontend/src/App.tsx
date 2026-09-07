@@ -6,9 +6,15 @@ type Status =
   | "ASSIGNED"
   | "IN_PROGRESS"
   | "ON_HOLD"
-  | "COMPLETED";
+  | "COMPLETED"
+  | "CLOSED"
+  | "CANCELLED";
 
-type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+type Priority =
+  | "LOW"
+  | "MEDIUM"
+  | "HIGH"
+  | "CRITICAL";
 
 interface WorkOrder {
   id: number;
@@ -35,11 +41,29 @@ interface LoginResponse {
   token: string;
 }
 
+interface WorkOrderPage {
+  content: WorkOrder[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+interface DashboardResponse {
+  totalWorkOrders: number;
+  overdueWorkOrders: number;
+  statusCounts: Record<string, number>;
+  priorityCounts: Record<string, number>;
+}
+
 const API_BASE_URL = "http://localhost:8080/api";
 
 const LOGIN_URL = `${API_BASE_URL}/auth/login`;
 const WORK_ORDERS_URL = `${API_BASE_URL}/work-orders`;
 const USERS_URL = `${API_BASE_URL}/users`;
+const DASHBOARD_URL = `${API_BASE_URL}/dashboard`;
 
 const columns: { key: Status; label: string }[] = [
   { key: "NEW", label: "New" },
@@ -66,25 +90,44 @@ function App() {
     localStorage.getItem("token")
   );
 
-  const [email, setEmail] = useState("testuser@example.com");
+  const [email, setEmail] = useState(
+    "testuser@example.com"
+  );
+
   const [password, setPassword] = useState("");
 
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] =
+    useState(false);
+
+  const [loginError, setLoginError] =
+    useState("");
 
   // =========================
   // WORK ORDERS
   // =========================
 
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [workOrders, setWorkOrders] =
+    useState<WorkOrder[]>([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [currentPage, setCurrentPage] =
+    useState(0);
+
+  const [totalPages, setTotalPages] =
+    useState(0);
 
   // =========================
   // TECHNICIANS
   // =========================
 
-  const [technicians, setTechnicians] = useState<User[]>([]);
+  const [technicians, setTechnicians] =
+    useState<User[]>([]);
+
   const [techniciansLoading, setTechniciansLoading] =
     useState(false);
 
@@ -99,18 +142,36 @@ function App() {
     useState<number | null>(null);
 
   // =========================
-  // LOAD WORK ORDERS
+  // DASHBOARD
+  // =========================
+
+  const [dashboard, setDashboard] =
+    useState<DashboardResponse | null>(null);
+
+  const [dashboardLoading, setDashboardLoading] =
+    useState(false);
+
+  const [dashboardVisible, setDashboardVisible] =
+    useState(false);
+
+  // =========================
+  // INITIAL LOAD
   // =========================
 
   useEffect(() => {
     if (token) {
-      loadWorkOrders(token);
+      loadWorkOrders(token, 0);
       loadTechnicians(token);
     }
   }, [token]);
 
+  // =========================
+  // LOAD WORK ORDERS
+  // =========================
+
   async function loadWorkOrders(
-    authToken: string = token || ""
+    authToken: string = token || "",
+    page: number = currentPage
   ) {
     if (!authToken) {
       return;
@@ -120,13 +181,16 @@ function App() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(WORK_ORDERS_URL, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        `${WORK_ORDERS_URL}?page=${page}&size=100`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (
         response.status === 401 ||
@@ -144,9 +208,12 @@ function App() {
         );
       }
 
-      const data: WorkOrder[] = await response.json();
+      const data: WorkOrderPage =
+        await response.json();
 
-      setWorkOrders(data);
+      setWorkOrders(data.content || []);
+      setCurrentPage(data.number || 0);
+      setTotalPages(data.totalPages || 0);
     } catch (err) {
       console.error(err);
 
@@ -172,13 +239,16 @@ function App() {
     try {
       setTechniciansLoading(true);
 
-      const response = await fetch(USERS_URL, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        USERS_URL,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (
         response.status === 401 ||
@@ -196,12 +266,15 @@ function App() {
         );
       }
 
-      const users: User[] = await response.json();
+      const users: User[] =
+        await response.json();
 
-      const technicianUsers = users.filter(
-        (user) =>
-          user.role?.toUpperCase() === "TECHNICIAN"
-      );
+      const technicianUsers =
+        users.filter(
+          (user) =>
+            user.role?.toUpperCase() ===
+            "TECHNICIAN"
+        );
 
       setTechnicians(technicianUsers);
     } catch (err) {
@@ -216,6 +289,66 @@ function App() {
   }
 
   // =========================
+  // LOAD DASHBOARD
+  // =========================
+
+  async function loadDashboard() {
+    const authToken =
+      localStorage.getItem("token");
+
+    if (!authToken) {
+      setToken(null);
+      return;
+    }
+
+    try {
+      setDashboardLoading(true);
+      setError("");
+
+      const response = await fetch(
+        DASHBOARD_URL,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
+        setError(
+          "Dashboard sirf Manager aur Dispatcher ke liye available hai."
+        );
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Dashboard failed (${response.status})`
+        );
+      }
+
+      const data: DashboardResponse =
+        await response.json();
+
+      setDashboard(data);
+      setDashboardVisible(true);
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        "Dashboard load nahi ho raha. Backend check karo."
+      );
+    } finally {
+      setDashboardLoading(false);
+    }
+  }
+
+  // =========================
   // LOGIN
   // =========================
 
@@ -224,16 +357,19 @@ function App() {
       setLoginLoading(true);
       setLoginError("");
 
-      const response = await fetch(LOGIN_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
+      const response = await fetch(
+        LOGIN_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            password,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(
@@ -241,13 +377,19 @@ function App() {
         );
       }
 
-      const data: LoginResponse = await response.json();
+      const data: LoginResponse =
+        await response.json();
 
       if (!data.token) {
-        throw new Error("Token not received");
+        throw new Error(
+          "Token not received"
+        );
       }
 
-      localStorage.setItem("token", data.token);
+      localStorage.setItem(
+        "token",
+        data.token
+      );
 
       setToken(data.token);
       setPassword("");
@@ -272,6 +414,8 @@ function App() {
     setToken(null);
     setWorkOrders([]);
     setTechnicians([]);
+    setDashboard(null);
+    setDashboardVisible(false);
     setError("");
     setLoginError("");
     setPassword("");
@@ -285,7 +429,8 @@ function App() {
     workOrderId: number,
     newStatus: Status
   ) {
-    const authToken = localStorage.getItem("token");
+    const authToken =
+      localStorage.getItem("token");
 
     if (!authToken) {
       setToken(null);
@@ -327,12 +472,13 @@ function App() {
       const updatedWorkOrder: WorkOrder =
         await response.json();
 
-      setWorkOrders((currentOrders) =>
-        currentOrders.map((order) =>
-          order.id === updatedWorkOrder.id
-            ? updatedWorkOrder
-            : order
-        )
+      setWorkOrders(
+        (currentOrders) =>
+          currentOrders.map((order) =>
+            order.id === updatedWorkOrder.id
+              ? updatedWorkOrder
+              : order
+          )
       );
     } catch (err) {
       console.error(err);
@@ -353,7 +499,8 @@ function App() {
     workOrderId: number,
     technicianId: number
   ) {
-    const authToken = localStorage.getItem("token");
+    const authToken =
+      localStorage.getItem("token");
 
     if (!authToken) {
       setToken(null);
@@ -393,12 +540,13 @@ function App() {
       const updatedWorkOrder: WorkOrder =
         await response.json();
 
-      setWorkOrders((currentOrders) =>
-        currentOrders.map((order) =>
-          order.id === updatedWorkOrder.id
-            ? updatedWorkOrder
-            : order
-        )
+      setWorkOrders(
+        (currentOrders) =>
+          currentOrders.map((order) =>
+            order.id === updatedWorkOrder.id
+              ? updatedWorkOrder
+              : order
+          )
       );
     } catch (err) {
       console.error(err);
@@ -412,10 +560,12 @@ function App() {
   }
 
   // =========================
-  // PRIORITY
+  // PRIORITY CLASS
   // =========================
 
-  function getPriorityClass(priority: Priority) {
+  function getPriorityClass(
+    priority: Priority
+  ) {
     return `priority ${priority.toLowerCase()}`;
   }
 
@@ -423,34 +573,49 @@ function App() {
   // DATE
   // =========================
 
-  function formatDate(date?: string) {
+  function formatDate(
+    date?: string
+  ) {
     if (!date) {
       return "No SLA";
     }
 
-    const parsedDate = new Date(date);
+    const parsedDate =
+      new Date(date);
 
-    if (Number.isNaN(parsedDate.getTime())) {
+    if (
+      Number.isNaN(
+        parsedDate.getTime()
+      )
+    ) {
       return date;
     }
 
-    return parsedDate.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+    return parsedDate.toLocaleDateString(
+      "en-IN",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }
+    );
   }
 
-  // ==================================================
+  // =========================
   // LOGIN SCREEN
-  // ==================================================
+  // =========================
 
   if (!token) {
     return (
       <div className="app">
+
         <div className="login-page">
+
           <div className="login-card">
-            <h1>Keystone</h1>
+
+            <h1>
+              Keystone
+            </h1>
 
             <h2>
               Login to Work Order Board
@@ -462,7 +627,9 @@ function App() {
                 login();
               }}
             >
+
               <div className="form-group">
+
                 <label htmlFor="email">
                   Email
                 </label>
@@ -472,14 +639,18 @@ function App() {
                   type="email"
                   value={email}
                   onChange={(event) =>
-                    setEmail(event.target.value)
+                    setEmail(
+                      event.target.value
+                    )
                   }
                   placeholder="Enter email"
                   required
                 />
+
               </div>
 
               <div className="form-group">
+
                 <label htmlFor="password">
                   Password
                 </label>
@@ -489,11 +660,14 @@ function App() {
                   type="password"
                   value={password}
                   onChange={(event) =>
-                    setPassword(event.target.value)
+                    setPassword(
+                      event.target.value
+                    )
                   }
                   placeholder="Enter password"
                   required
                 />
+
               </div>
 
               {loginError && (
@@ -511,29 +685,36 @@ function App() {
                   ? "Logging in..."
                   : "Login"}
               </button>
+
             </form>
+
           </div>
+
         </div>
+
       </div>
     );
   }
 
-  // ==================================================
-  // WORK ORDER BOARD
-  // ==================================================
+  // =========================
+  // MAIN APPLICATION
+  // =========================
 
   return (
     <div className="app">
 
       <header className="header">
+
         <div>
+
           <h1>
-            Work Order Board
+            Keystone
           </h1>
 
           <p>
-            Manage and track work orders by status
+            Work Order Management System
           </p>
+
         </div>
 
         <div className="header-actions">
@@ -541,7 +722,11 @@ function App() {
           <button
             className="refresh-btn"
             onClick={() => {
-              loadWorkOrders();
+              loadWorkOrders(
+                undefined,
+                currentPage
+              );
+
               loadTechnicians();
             }}
             disabled={loading}
@@ -552,6 +737,24 @@ function App() {
           </button>
 
           <button
+            className="refresh-btn"
+            onClick={() => {
+              if (dashboardVisible) {
+                setDashboardVisible(false);
+              } else {
+                loadDashboard();
+              }
+            }}
+            disabled={dashboardLoading}
+          >
+            {dashboardLoading
+              ? "Loading..."
+              : dashboardVisible
+                ? "Work Orders"
+                : "Dashboard"}
+          </button>
+
+          <button
             className="logout-btn"
             onClick={logout}
           >
@@ -559,6 +762,7 @@ function App() {
           </button>
 
         </div>
+
       </header>
 
       {error && (
@@ -567,265 +771,550 @@ function App() {
         </div>
       )}
 
-      {loading && workOrders.length === 0 && (
-        <div className="message">
-          Loading work orders...
-        </div>
-      )}
+      {/* =========================
+          DASHBOARD
+      ========================= */}
 
-      <main className="board">
+      {dashboardVisible &&
+      dashboard ? (
 
-        {columns.map((column) => {
+        <main
+          style={{
+            padding: "24px",
+          }}
+        >
 
-          const orders = workOrders.filter(
-            (workOrder) =>
-              workOrder.status === column.key
-          );
+          <h2>
+            Dashboard
+          </h2>
 
-          return (
-            <section
-              className="column"
-              key={column.key}
+          <p>
+            Work order overview and SLA status
+          </p>
+
+          {/* SUMMARY CARDS */}
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "16px",
+              marginTop: "24px",
+              marginBottom: "32px",
+            }}
+          >
+
+            <div className="card">
+
+              <h3>
+                Total Work Orders
+              </h3>
+
+              <strong
+                style={{
+                  fontSize: "32px",
+                }}
+              >
+                {dashboard.totalWorkOrders}
+              </strong>
+
+            </div>
+
+            <div className="card">
+
+              <h3>
+                SLA Breached
+              </h3>
+
+              <strong
+                style={{
+                  fontSize: "32px",
+                }}
+              >
+                {dashboard.overdueWorkOrders}
+              </strong>
+
+            </div>
+
+          </div>
+
+          {/* STATUS BREAKDOWN */}
+
+          <section
+            className="card"
+            style={{
+              marginBottom: "24px",
+            }}
+          >
+
+            <h2>
+              Status Breakdown
+            </h2>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(150px, 1fr))",
+                gap: "12px",
+                marginTop: "16px",
+              }}
             >
 
-              <div className="column-header">
-                <h2>
-                  {column.label}
-                </h2>
+              {Object.entries(
+                dashboard.statusCounts
+              ).map(
+                ([status, count]) => (
 
-                <span>
-                  {orders.length}
-                </span>
-              </div>
+                  <div
+                    key={status}
+                    style={{
+                      padding: "16px",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                    }}
+                  >
 
-              <div className="cards">
+                    <strong>
+                      {status.replace(
+                        "_",
+                        " "
+                      )}
+                    </strong>
 
-                {orders.length === 0 ? (
+                    <div
+                      style={{
+                        fontSize: "24px",
+                        marginTop: "8px",
+                      }}
+                    >
+                      {count}
+                    </div>
 
-                  <div className="empty">
-                    No work orders
                   </div>
 
-                ) : (
+                )
+              )}
 
-                  orders.map((workOrder) => (
+            </div>
 
-                    <article
-                      className="card"
-                      key={workOrder.id}
+          </section>
+
+          {/* PRIORITY BREAKDOWN */}
+
+          <section className="card">
+
+            <h2>
+              Priority Breakdown
+            </h2>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(150px, 1fr))",
+                gap: "12px",
+                marginTop: "16px",
+              }}
+            >
+
+              {Object.entries(
+                dashboard.priorityCounts
+              ).map(
+                ([priority, count]) => (
+
+                  <div
+                    key={priority}
+                    style={{
+                      padding: "16px",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                    }}
+                  >
+
+                    <strong>
+                      {priority}
+                    </strong>
+
+                    <div
+                      style={{
+                        fontSize: "24px",
+                        marginTop: "8px",
+                      }}
                     >
+                      {count}
+                    </div>
 
-                      <div className="card-top">
+                  </div>
 
-                        <strong>
-                          {workOrder.code}
-                        </strong>
+                )
+              )}
 
-                        <span
-                          className={getPriorityClass(
-                            workOrder.priority
-                          )}
-                        >
-                          {workOrder.priority}
-                        </span>
+            </div>
 
-                      </div>
+          </section>
 
-                      <h3>
-                        {workOrder.title}
-                      </h3>
+        </main>
 
-                      {workOrder.description && (
-                        <p className="description">
-                          {workOrder.description}
-                        </p>
+      ) : (
+
+        /* =========================
+           WORK ORDER BOARD
+        ========================= */
+
+        <>
+
+          {loading &&
+          workOrders.length === 0 && (
+            <div className="message">
+              Loading work orders...
+            </div>
+          )}
+
+          <main className="board">
+
+            {columns.map(
+              (column) => {
+
+                const orders =
+                  workOrders.filter(
+                    (workOrder) =>
+                      workOrder.status ===
+                      column.key
+                  );
+
+                return (
+                  <section
+                    className="column"
+                    key={column.key}
+                  >
+
+                    <div className="column-header">
+
+                      <h2>
+                        {column.label}
+                      </h2>
+
+                      <span>
+                        {orders.length}
+                      </span>
+
+                    </div>
+
+                    <div className="cards">
+
+                      {orders.length === 0 ? (
+
+                        <div className="empty">
+                          No work orders
+                        </div>
+
+                      ) : (
+
+                        orders.map(
+                          (workOrder) => (
+
+                            <article
+                              className="card"
+                              key={workOrder.id}
+                            >
+
+                              <div className="card-top">
+
+                                <strong>
+                                  {workOrder.code}
+                                </strong>
+
+                                <span
+                                  className={getPriorityClass(
+                                    workOrder.priority
+                                  )}
+                                >
+                                  {workOrder.priority}
+                                </span>
+
+                              </div>
+
+                              <h3>
+                                {workOrder.title}
+                              </h3>
+
+                              {workOrder.description && (
+                                <p className="description">
+                                  {
+                                    workOrder.description
+                                  }
+                                </p>
+                              )}
+
+                              <div className="details">
+
+                                <div>
+                                  <span>
+                                    Customer
+                                  </span>
+
+                                  <strong>
+                                    {workOrder.customerName ||
+                                      "—"}
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  <span>
+                                    Site
+                                  </span>
+
+                                  <strong>
+                                    {workOrder.siteName ||
+                                      "—"}
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  <span>
+                                    Assignee
+                                  </span>
+
+                                  <strong>
+                                    {workOrder.assigneeEmail ||
+                                      "Unassigned"}
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  <span>
+                                    SLA Due
+                                  </span>
+
+                                  <strong>
+                                    {formatDate(
+                                      workOrder.slaDueDate
+                                    )}
+                                  </strong>
+                                </div>
+
+                              </div>
+
+                              {/* STATUS */}
+
+                              <div className="status-control">
+
+                                <label
+                                  htmlFor={`status-${workOrder.id}`}
+                                >
+                                  Status
+                                </label>
+
+                                <select
+                                  id={`status-${workOrder.id}`}
+                                  value={
+                                    workOrder.status
+                                  }
+                                  disabled={
+                                    updatingStatusId ===
+                                    workOrder.id
+                                  }
+                                  onChange={(
+                                    event
+                                  ) =>
+                                    updateStatus(
+                                      workOrder.id,
+                                      event.target
+                                        .value as Status
+                                    )
+                                  }
+                                >
+
+                                  {statuses.map(
+                                    (status) => (
+
+                                      <option
+                                        key={status}
+                                        value={status}
+                                      >
+                                        {status.replace(
+                                          "_",
+                                          " "
+                                        )}
+                                      </option>
+
+                                    )
+                                  )}
+
+                                </select>
+
+                                {updatingStatusId ===
+                                  workOrder.id && (
+                                  <small>
+                                    Updating...
+                                  </small>
+                                )}
+
+                              </div>
+
+                              {/* ASSIGN TECHNICIAN */}
+
+                              <div className="assign-control">
+
+                                <label
+                                  htmlFor={`technician-${workOrder.id}`}
+                                >
+                                  Assign Technician
+                                </label>
+
+                                <select
+                                  id={`technician-${workOrder.id}`}
+                                  value={
+                                    workOrder.assigneeId ||
+                                    ""
+                                  }
+                                  disabled={
+                                    assigningId ===
+                                      workOrder.id ||
+                                    techniciansLoading
+                                  }
+                                  onChange={(
+                                    event
+                                  ) => {
+
+                                    const selectedId =
+                                      Number(
+                                        event.target
+                                          .value
+                                      );
+
+                                    if (
+                                      selectedId >
+                                      0
+                                    ) {
+                                      assignTechnician(
+                                        workOrder.id,
+                                        selectedId
+                                      );
+                                    }
+                                  }}
+                                >
+
+                                  <option value="">
+                                    {techniciansLoading
+                                      ? "Loading technicians..."
+                                      : "Select technician"}
+                                  </option>
+
+                                  {technicians.map(
+                                    (technician) => (
+
+                                      <option
+                                        key={
+                                          technician.id
+                                        }
+                                        value={
+                                          technician.id
+                                        }
+                                      >
+                                        {
+                                          technician.name
+                                        }{" "}
+                                        (
+                                        {
+                                          technician.email
+                                        }
+                                        )
+                                      </option>
+
+                                    )
+                                  )}
+
+                                </select>
+
+                                {assigningId ===
+                                  workOrder.id && (
+                                  <small>
+                                    Assigning...
+                                  </small>
+                                )}
+
+                              </div>
+
+                            </article>
+
+                          )
+                        )
+
                       )}
 
-                      <div className="details">
+                    </div>
 
-                        <div>
-                          <span>
-                            Customer
-                          </span>
+                  </section>
+                );
+              }
+            )}
 
-                          <strong>
-                            {workOrder.customerName ||
-                              "—"}
-                          </strong>
-                        </div>
+          </main>
 
-                        <div>
-                          <span>
-                            Site
-                          </span>
+          {/* PAGINATION */}
 
-                          <strong>
-                            {workOrder.siteName ||
-                              "—"}
-                          </strong>
-                        </div>
+          {totalPages > 1 && (
 
-                        <div>
-                          <span>
-                            Assignee
-                          </span>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: "12px",
+                padding: "20px",
+              }}
+            >
 
-                          <strong>
-                            {workOrder.assigneeEmail ||
-                              "Unassigned"}
-                          </strong>
-                        </div>
+              <button
+                className="refresh-btn"
+                disabled={currentPage === 0}
+                onClick={() =>
+                  loadWorkOrders(
+                    undefined,
+                    currentPage - 1
+                  )
+                }
+              >
+                Previous
+              </button>
 
-                        <div>
-                          <span>
-                            SLA Due
-                          </span>
+              <span
+                style={{
+                  padding: "10px",
+                }}
+              >
+                Page {currentPage + 1} of{" "}
+                {totalPages}
+              </span>
 
-                          <strong>
-                            {formatDate(
-                              workOrder.slaDueDate
-                            )}
-                          </strong>
-                        </div>
+              <button
+                className="refresh-btn"
+                disabled={
+                  currentPage >=
+                  totalPages - 1
+                }
+                onClick={() =>
+                  loadWorkOrders(
+                    undefined,
+                    currentPage + 1
+                  )
+                }
+              >
+                Next
+              </button>
 
-                      </div>
+            </div>
 
-                      {/* =========================
-                          STATUS
-                      ========================= */}
+          )}
 
-                      <div className="status-control">
+        </>
 
-                        <label
-                          htmlFor={`status-${workOrder.id}`}
-                        >
-                          Status
-                        </label>
+      )}
 
-                        <select
-                          id={`status-${workOrder.id}`}
-                          value={workOrder.status}
-                          disabled={
-                            updatingStatusId ===
-                            workOrder.id
-                          }
-                          onChange={(event) =>
-                            updateStatus(
-                              workOrder.id,
-                              event.target
-                                .value as Status
-                            )
-                          }
-                        >
-                          {statuses.map((status) => (
-                            <option
-                              key={status}
-                              value={status}
-                            >
-                              {status.replace(
-                                "_",
-                                " "
-                              )}
-                            </option>
-                          ))}
-                        </select>
-
-                        {updatingStatusId ===
-                          workOrder.id && (
-                          <small>
-                            Updating...
-                          </small>
-                        )}
-
-                      </div>
-
-                      {/* =========================
-                          ASSIGN TECHNICIAN
-                      ========================= */}
-
-                      <div className="assign-control">
-
-                        <label
-                          htmlFor={`technician-${workOrder.id}`}
-                        >
-                          Assign Technician
-                        </label>
-
-                        <select
-                          id={`technician-${workOrder.id}`}
-                          value={
-                            workOrder.assigneeId ||
-                            ""
-                          }
-                          disabled={
-                            assigningId ===
-                              workOrder.id ||
-                            techniciansLoading
-                          }
-                          onChange={(event) => {
-
-                            const selectedId =
-                              Number(
-                                event.target.value
-                              );
-
-                            if (
-                              selectedId > 0
-                            ) {
-                              assignTechnician(
-                                workOrder.id,
-                                selectedId
-                              );
-                            }
-
-                          }}
-                        >
-
-                          <option value="">
-                            {techniciansLoading
-                              ? "Loading technicians..."
-                              : "Select technician"}
-                          </option>
-
-                          {technicians.map(
-                            (technician) => (
-                              <option
-                                key={technician.id}
-                                value={technician.id}
-                              >
-                                {technician.name} (
-                                {technician.email})
-                              </option>
-                            )
-                          )}
-
-                        </select>
-
-                        {assigningId ===
-                          workOrder.id && (
-                          <small>
-                            Assigning...
-                          </small>
-                        )}
-
-                      </div>
-
-                    </article>
-
-                  ))
-
-                )}
-
-              </div>
-
-            </section>
-          );
-        })}
-
-      </main>
     </div>
   );
 }
 
 export default App;
-

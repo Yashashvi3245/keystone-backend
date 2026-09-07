@@ -32,5 +32,6 @@ public record WorkOrderResponse(
         Long assigneeId,
 
         String assigneeEmail
+
 ) {
 }
