@@ -1,10 +1,13 @@
 package com.keystone.service;
 
+import com.keystone.dto.WorkOrderResponse;
 import com.keystone.model.WorkOrder;
 import com.keystone.model.WorkOrderStatus;
 import com.keystone.repository.WorkOrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +24,11 @@ public class SlaService {
 
     private final WorkOrderRepository workOrderRepository;
     private final NotificationService notificationService;
+
+    // Lazy to break the SlaService <-> WorkOrderService circular dep
+    @Lazy
+    @Autowired
+    private WorkOrderService workOrderService;
 
     public SlaService(
             WorkOrderRepository workOrderRepository,
@@ -40,9 +48,10 @@ public class SlaService {
             );
         }
 
+        // Matches the Priority enum: URGENT, HIGH, MEDIUM, LOW
         return switch (priority.toUpperCase()) {
 
-            case "CRITICAL" ->
+            case "URGENT" ->
                     LocalDateTime.now().plusHours(4);
 
             case "HIGH" ->
@@ -119,24 +128,36 @@ public class SlaService {
                 );
     }
 
-    public List<WorkOrder> getOverdueWorkOrders() {
-
-        LocalDateTime now =
-                LocalDateTime.now();
-
+    /**
+     * Returns overdue work orders as DTOs — used by the REST controller.
+     */
+    public List<WorkOrderResponse> getOverdueWorkOrders() {
+        LocalDateTime now = LocalDateTime.now();
         return workOrderRepository.findAll()
                 .stream()
-                .filter(workOrder ->
-                        workOrder.getSlaDueDate() != null
-                                && workOrder.getSlaDueDate()
-                                .isBefore(now)
-                                && workOrder.getStatus()
-                                != WorkOrderStatus.CLOSED
-                                && workOrder.getStatus()
-                                != WorkOrderStatus.CANCELLED
-                                && workOrder.getStatus()
-                                != WorkOrderStatus.COMPLETED
-                )
+                .filter(wo ->
+                        wo.getSlaDueDate() != null
+                        && wo.getSlaDueDate().isBefore(now)
+                        && wo.getStatus() != WorkOrderStatus.CLOSED
+                        && wo.getStatus() != WorkOrderStatus.CANCELLED
+                        && wo.getStatus() != WorkOrderStatus.COMPLETED)
+                .map(workOrderService::toResponse)
+                .toList();
+    }
+
+    /**
+     * Returns overdue work orders as entities — used internally by the scheduler.
+     */
+    private List<WorkOrder> getOverdueEntities() {
+        LocalDateTime now = LocalDateTime.now();
+        return workOrderRepository.findAll()
+                .stream()
+                .filter(wo ->
+                        wo.getSlaDueDate() != null
+                        && wo.getSlaDueDate().isBefore(now)
+                        && wo.getStatus() != WorkOrderStatus.CLOSED
+                        && wo.getStatus() != WorkOrderStatus.CANCELLED
+                        && wo.getStatus() != WorkOrderStatus.COMPLETED)
                 .toList();
     }
 
@@ -158,8 +179,7 @@ public class SlaService {
     @Scheduled(fixedRate = 300000)
     public void checkSlaBreaches() {
 
-        List<WorkOrder> overdueWorkOrders =
-                getOverdueWorkOrders();
+        List<WorkOrder> overdueWorkOrders = getOverdueEntities();
 
         if (overdueWorkOrders.isEmpty()) {
 

@@ -7,8 +7,11 @@ import com.keystone.repository.UserRepository;
 import com.keystone.service.NotificationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 import java.util.List;
 
@@ -28,6 +31,7 @@ public class NotificationController {
     }
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<NotificationResponse>> getNotifications(
             Authentication authentication) {
 
@@ -44,6 +48,7 @@ public class NotificationController {
     }
 
     @GetMapping("/unread")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<NotificationResponse>> getUnreadNotifications(
             Authentication authentication) {
 
@@ -60,6 +65,7 @@ public class NotificationController {
     }
 
     @GetMapping("/unread/count")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Long> getUnreadCount(
             Authentication authentication) {
 
@@ -73,6 +79,7 @@ public class NotificationController {
     }
 
     @PatchMapping("/{id}/read")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> markAsRead(
             @PathVariable Long id,
             Authentication authentication) {

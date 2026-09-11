@@ -4,6 +4,8 @@ import com.keystone.dto.WorkOrderResponse;
 import com.keystone.dto.WorkOrderRequest;
 import com.keystone.service.WorkOrderService;
 import com.keystone.model.WorkOrderStatus;
+import com.keystone.model.User;
+import com.keystone.repository.UserRepository;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -15,16 +17,19 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/work-orders")
 public class WorkOrderController {
 
     private final WorkOrderService workOrderService;
+    private final UserRepository userRepository;
 
-    public WorkOrderController(WorkOrderService workOrderService) {
+    public WorkOrderController(
+            WorkOrderService workOrderService,
+            UserRepository userRepository) {
+
         this.workOrderService = workOrderService;
+        this.userRepository = userRepository;
     }
 
     // =========================
@@ -32,7 +37,7 @@ public class WorkOrderController {
     // FILTER / PAGINATION
     // =========================
     @GetMapping
-    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN', 'CUSTOMER')")
     public ResponseEntity<?> getWorkOrders(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) WorkOrderStatus status,
@@ -43,7 +48,9 @@ public class WorkOrderController {
             @RequestParam(defaultValue = "desc") String direction,
             Authentication authentication) {
 
-        // Prevent invalid pagination values
+        // =========================
+        // PAGINATION VALIDATION
+        // =========================
         if (page < 0) {
             page = 0;
         }
@@ -52,12 +59,13 @@ public class WorkOrderController {
             size = 10;
         }
 
-        // Prevent extremely large page requests
         if (size > 100) {
             size = 100;
         }
 
-        // Allowed sorting fields
+        // =========================
+        // SAFE SORTING
+        // =========================
         String safeSortBy = switch (sortBy) {
             case "id", "code", "title", "priority",
                  "status", "slaDueDate" -> sortBy;
@@ -76,56 +84,87 @@ public class WorkOrderController {
                         Sort.by(sortDirection, safeSortBy)
                 );
 
-        Page<WorkOrderResponse> result =
-                workOrderService.searchWorkOrders(
-                        search,
-                        status,
-                        priority,
-                        pageable
-                );
-
         // =========================
         // MANAGER / DISPATCHER
         // =========================
         if (hasRole(authentication, "MANAGER")
                 || hasRole(authentication, "DISPATCHER")) {
 
+            Page<WorkOrderResponse> result =
+                    workOrderService.searchWorkOrders(
+                            search,
+                            status,
+                            priority,
+                            pageable
+                    );
+
             return ResponseEntity.ok(result);
         }
 
         // =========================
-        // TECHNICIAN
+        // CUSTOMER
         // =========================
-        // Technician must only receive
-        // work orders assigned to them.
-        List<WorkOrderResponse> assignedWorkOrders =
-                result.getContent()
-                        .stream()
-                        .filter(workOrder ->
-                                isAssignedToCurrentUser(
-                                        workOrder,
-                                        authentication
-                                ))
-                        .toList();
+        if (hasRole(authentication, "CUSTOMER")) {
 
-        return ResponseEntity.ok(
-                new TechnicianPageResponse(
-                        assignedWorkOrders,
-                        result.getNumber(),
-                        result.getSize(),
-                        result.getTotalElements(),
-                        result.getTotalPages(),
-                        result.isFirst(),
-                        result.isLast()
-                )
-        );
+            try {
+
+                User currentUser =
+                        getCurrentUser(authentication);
+
+                if (currentUser.getCustomer() == null
+                        || currentUser.getCustomer().getId() == null) {
+
+                    return ResponseEntity
+                            .status(HttpStatus.FORBIDDEN)
+                            .body(
+                                    "Customer account is not linked to a customer organization"
+                            );
+                }
+
+                Long customerId =
+                        currentUser.getCustomer().getId();
+
+                Page<WorkOrderResponse> result =
+                        workOrderService.searchCustomerWorkOrders(
+                                customerId,
+                                search,
+                                status,
+                                priority,
+                                pageable
+                        );
+
+                return ResponseEntity.ok(result);
+
+            } catch (RuntimeException e) {
+
+                return ResponseEntity
+                        .status(HttpStatus.FORBIDDEN)
+                        .body(e.getMessage());
+            }
+        }
+
+        // =========================
+        // TECHNICIAN — DB-scoped (fixes pagination)
+        // =========================
+        User currentUser = getCurrentUser(authentication);
+
+        Page<WorkOrderResponse> result =
+                workOrderService.searchTechnicianWorkOrders(
+                        currentUser.getId(),
+                        search,
+                        status,
+                        priority,
+                        pageable
+                );
+
+        return ResponseEntity.ok(result);
     }
 
     // =========================
     // GET BY ID
     // =========================
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN', 'CUSTOMER')")
     public ResponseEntity<?> getWorkOrderById(
             @PathVariable Long id,
             Authentication authentication) {
@@ -135,12 +174,37 @@ public class WorkOrderController {
             WorkOrderResponse workOrder =
                     workOrderService.getWorkOrderById(id);
 
+            // =========================
+            // MANAGER / DISPATCHER
+            // =========================
             if (hasRole(authentication, "MANAGER")
                     || hasRole(authentication, "DISPATCHER")) {
 
                 return ResponseEntity.ok(workOrder);
             }
 
+            // =========================
+            // CUSTOMER
+            // =========================
+            if (hasRole(authentication, "CUSTOMER")) {
+
+                if (isCustomerWorkOrder(
+                        workOrder,
+                        authentication)) {
+
+                    return ResponseEntity.ok(workOrder);
+                }
+
+                return ResponseEntity
+                        .status(HttpStatus.FORBIDDEN)
+                        .body(
+                                "Customer is not authorized to access this work order"
+                        );
+            }
+
+            // =========================
+            // TECHNICIAN
+            // =========================
             if (isAssignedToCurrentUser(
                     workOrder,
                     authentication)) {
@@ -166,7 +230,7 @@ public class WorkOrderController {
     // GET BY CODE
     // =========================
     @GetMapping("/code/{code}")
-    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN', 'CUSTOMER')")
     public ResponseEntity<?> getWorkOrderByCode(
             @PathVariable String code,
             Authentication authentication) {
@@ -176,12 +240,37 @@ public class WorkOrderController {
             WorkOrderResponse workOrder =
                     workOrderService.getWorkOrderByCode(code);
 
+            // =========================
+            // MANAGER / DISPATCHER
+            // =========================
             if (hasRole(authentication, "MANAGER")
                     || hasRole(authentication, "DISPATCHER")) {
 
                 return ResponseEntity.ok(workOrder);
             }
 
+            // =========================
+            // CUSTOMER
+            // =========================
+            if (hasRole(authentication, "CUSTOMER")) {
+
+                if (isCustomerWorkOrder(
+                        workOrder,
+                        authentication)) {
+
+                    return ResponseEntity.ok(workOrder);
+                }
+
+                return ResponseEntity
+                        .status(HttpStatus.FORBIDDEN)
+                        .body(
+                                "Customer is not authorized to access this work order"
+                        );
+            }
+
+            // =========================
+            // TECHNICIAN
+            // =========================
             if (isAssignedToCurrentUser(
                     workOrder,
                     authentication)) {
@@ -207,7 +296,7 @@ public class WorkOrderController {
     // GET WORK ORDER HISTORY
     // =========================
     @GetMapping("/{id}/history")
-    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER', 'TECHNICIAN', 'CUSTOMER')")
     public ResponseEntity<?> getWorkOrderHistory(
             @PathVariable Long id,
             Authentication authentication) {
@@ -217,6 +306,9 @@ public class WorkOrderController {
             WorkOrderResponse workOrder =
                     workOrderService.getWorkOrderById(id);
 
+            // =========================
+            // MANAGER / DISPATCHER
+            // =========================
             if (hasRole(authentication, "MANAGER")
                     || hasRole(authentication, "DISPATCHER")) {
 
@@ -225,6 +317,30 @@ public class WorkOrderController {
                 );
             }
 
+            // =========================
+            // CUSTOMER
+            // =========================
+            if (hasRole(authentication, "CUSTOMER")) {
+
+                if (isCustomerWorkOrder(
+                        workOrder,
+                        authentication)) {
+
+                    return ResponseEntity.ok(
+                            workOrderService.getWorkOrderHistory(id)
+                    );
+                }
+
+                return ResponseEntity
+                        .status(HttpStatus.FORBIDDEN)
+                        .body(
+                                "Customer is not authorized to access this work order history"
+                        );
+            }
+
+            // =========================
+            // TECHNICIAN
+            // =========================
             if (isAssignedToCurrentUser(
                     workOrder,
                     authentication)) {
@@ -416,6 +532,28 @@ public class WorkOrderController {
     }
 
     // =========================
+    // GET CURRENT USER
+    // =========================
+    private User getCurrentUser(
+            Authentication authentication) {
+
+        if (authentication == null
+                || authentication.getName() == null) {
+
+            throw new RuntimeException(
+                    "Authenticated user not found"
+            );
+        }
+
+        return userRepository
+                .findByEmail(authentication.getName())
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "User not found"
+                        ));
+    }
+
+    // =========================
     // CHECK USER ROLE
     // =========================
     private boolean hasRole(
@@ -455,17 +593,32 @@ public class WorkOrderController {
     }
 
     // =========================
-    // TECHNICIAN PAGINATION
-    // RESPONSE
+    // CHECK CUSTOMER OWNERSHIP
     // =========================
-    private record TechnicianPageResponse(
-            List<WorkOrderResponse> content,
-            int page,
-            int size,
-            long totalElements,
-            int totalPages,
-            boolean first,
-            boolean last
-    ) {
+    private boolean isCustomerWorkOrder(
+            WorkOrderResponse workOrder,
+            Authentication authentication) {
+
+        if (workOrder == null
+                || authentication == null
+                || workOrder.customerId() == null) {
+
+            return false;
+        }
+
+        User currentUser =
+                getCurrentUser(authentication);
+
+        if (currentUser.getCustomer() == null
+                || currentUser.getCustomer().getId() == null) {
+
+            return false;
+        }
+
+        return workOrder.customerId()
+                .equals(
+                        currentUser.getCustomer().getId()
+                );
     }
+
 }

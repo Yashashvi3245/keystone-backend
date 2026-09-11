@@ -25,6 +25,32 @@ public class NotificationService {
         this.userRepository = userRepository;
     }
 
+    // -------------------------------------------------------
+    // Task 10: Notify technician on assignment
+    // -------------------------------------------------------
+    @Transactional
+    public void notifyTechnicianOfAssignment(WorkOrder workOrder) {
+
+        if (workOrder == null || workOrder.getAssignee() == null) return;
+
+        User technician = workOrder.getAssignee();
+
+        String message = "You have been assigned to work order "
+                + workOrder.getCode() + " — " + workOrder.getTitle();
+
+        boolean alreadyNotified = notificationRepository
+                .existsByUserIdAndMessage(technician.getId(), message);
+
+        if (!alreadyNotified) {
+            Notification n = new Notification();
+            n.setUser(technician);
+            n.setMessage(message);
+            n.setRead(false);
+            n.setCreatedAt(LocalDateTime.now());
+            notificationRepository.save(n);
+        }
+    }
+
     @Transactional
     public void notifyManagersOfSlaBreach(
             WorkOrder workOrder) {

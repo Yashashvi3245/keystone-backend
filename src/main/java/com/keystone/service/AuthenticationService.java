@@ -8,54 +8,54 @@ import org.springframework.stereotype.Service;
 @Service
 public class AuthenticationService {
 
-    private final UserService userService;
+    private final UserService     userService;
     private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
+    private final JwtService      jwtService;
 
-    public AuthenticationService(
-            UserService userService,
-            PasswordEncoder passwordEncoder,
-            JwtService jwtService) {
-
-        this.userService = userService;
+    public AuthenticationService(UserService userService,
+                                  PasswordEncoder passwordEncoder,
+                                  JwtService jwtService) {
+        this.userService     = userService;
         this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
+        this.jwtService      = jwtService;
     }
 
-    public String login(String email, String password) {
+    /**
+     * Authenticates user and returns a rich LoginResult containing
+     * the JWT token, role, userId, name, and customerId (if CUSTOMER role).
+     */
+    public LoginResult login(String email, String password) {
 
-        User user = userService
-                .getUserByEmail(email)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Invalid email or password"
-                        )
-                );
+        User user = userService.getUserByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
 
-        // TEMPORARY DEBUG
-        System.out.println("================================");
-        System.out.println("EMAIL = " + user.getEmail());
-        System.out.println("HASH = " + user.getPassword());
-
-        boolean passwordMatch =
-                passwordEncoder.matches(
-                        password,
-                        user.getPassword()
-                );
-
-        System.out.println(
-                "PASSWORD MATCH = " + passwordMatch
-        );
-        System.out.println("================================");
-
-        if (!passwordMatch) {
-            throw new RuntimeException(
-                    "Invalid email or password"
-            );
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            throw new RuntimeException("Invalid email or password");
         }
 
-        return jwtService.generateToken(
-                user.getEmail()
+        String token = jwtService.generateToken(user.getEmail());
+
+        Long customerId = (user.getCustomer() != null)
+                ? user.getCustomer().getId()
+                : null;
+
+        return new LoginResult(
+                token,
+                user.getRole().name(),
+                user.getId(),
+                user.getName(),
+                customerId
         );
     }
+
+    /**
+     * Immutable value returned on successful login.
+     */
+    public record LoginResult(
+            String token,
+            String role,
+            Long   userId,
+            String name,
+            Long   customerId
+    ) {}
 }

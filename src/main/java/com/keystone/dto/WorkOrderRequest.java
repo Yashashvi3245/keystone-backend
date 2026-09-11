@@ -16,7 +16,10 @@ public record WorkOrderRequest(
         @NotNull(message = "Priority is required")
         Priority priority,
 
-        @NotNull(message = "SLA due date is required")
+        /**
+         * Optional. When null the SLA due date is auto-calculated
+         * from priority by SlaService.calculateDueDate().
+         */
         LocalDateTime slaDueDate,
 
         @NotNull(message = "Customer ID is required")
@@ -26,5 +29,4 @@ public record WorkOrderRequest(
         Long siteId,
 
         Long assigneeId
-) {
-}
+) {}

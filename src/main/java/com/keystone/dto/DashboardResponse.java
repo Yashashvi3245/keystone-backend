@@ -8,9 +8,19 @@ public record DashboardResponse(
 
         long overdueWorkOrders,
 
+        long completedWorkOrders,
+
+        long inProgressWorkOrders,
+
+        double slaCompliancePercentage,
+
         Map<String, Long> statusCounts,
 
-        Map<String, Long> priorityCounts
+        Map<String, Long> priorityCounts,
+
+        Map<String, Long> technicianCounts,
+
+        Map<String, Long> siteCounts
 
 ) {
 }

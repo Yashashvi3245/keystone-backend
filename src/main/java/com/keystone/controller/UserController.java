@@ -2,7 +2,13 @@ package com.keystone.controller;
 
 import com.keystone.model.User;
 import com.keystone.service.UserService;
+
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,9 +25,13 @@ public class UserController {
 
     // =========================
     // GET ALL USERS
+    // MANAGER / DISPATCHER ONLY
     // =========================
+
     @GetMapping
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
     public ResponseEntity<List<User>> getAllUsers() {
+
         return ResponseEntity.ok(
                 userService.getAllUsers()
         );
@@ -29,22 +39,62 @@ public class UserController {
 
     // =========================
     // GET USER BY ID
+    // MANAGER / DISPATCHER ONLY
     // =========================
+
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'DISPATCHER')")
     public ResponseEntity<User> getUserById(
             @PathVariable Long id) {
 
         return userService.getUserById(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() ->
-                        ResponseEntity.notFound().build()
+                        ResponseEntity
+                                .notFound()
+                                .build()
+                );
+    }
+
+    // =========================
+    // GET CURRENT LOGGED-IN USER
+    // ALL AUTHENTICATED USERS
+    // =========================
+
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getCurrentUser(
+            Authentication authentication) {
+
+        if (authentication == null
+                || authentication.getName() == null) {
+
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body("User is not authenticated");
+        }
+
+        return userService
+                .getUserByEmail(
+                        authentication.getName()
+                )
+                .map(ResponseEntity::ok)
+                .orElseGet(() ->
+                        ResponseEntity
+                                .status(
+                                        HttpStatus.NOT_FOUND
+                                )
+                                .body(null)
                 );
     }
 
     // =========================
     // CREATE USER
+    // MANAGER ONLY
     // =========================
+
     @PostMapping
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<User> createUser(
             @RequestBody User user) {
 
@@ -55,51 +105,32 @@ public class UserController {
 
     // =========================
     // UPDATE USER
+    // MANAGER ONLY
     // =========================
+
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<User> updateUser(
             @PathVariable Long id,
             @RequestBody User user) {
 
-        return userService.updateUser(id, user)
+        return userService
+                .updateUser(id, user)
                 .map(ResponseEntity::ok)
                 .orElseGet(() ->
-                        ResponseEntity.notFound().build()
+                        ResponseEntity
+                                .notFound()
+                                .build()
                 );
     }
 
     // =========================
-    // TEMPORARY PASSWORD RESET
-    // DEVELOPMENT / TESTING ONLY
-    // =========================
-    @PostMapping("/reset-password")
-    public ResponseEntity<String> resetPassword(
-            @RequestParam String email,
-            @RequestParam String newPassword) {
-
-        try {
-
-            userService.resetPassword(
-                    email,
-                    newPassword
-            );
-
-            return ResponseEntity.ok(
-                    "Password reset successfully"
-            );
-
-        } catch (RuntimeException e) {
-
-            return ResponseEntity
-                    .notFound()
-                    .build();
-        }
-    }
-
-    // =========================
     // DELETE USER
+    // MANAGER ONLY
     // =========================
+
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<Void> deleteUser(
             @PathVariable Long id) {
 
@@ -107,7 +138,9 @@ public class UserController {
 
             userService.deleteUser(id);
 
-            return ResponseEntity.noContent().build();
+            return ResponseEntity
+                    .noContent()
+                    .build();
 
         } catch (RuntimeException e) {
 

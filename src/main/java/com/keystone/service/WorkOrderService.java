@@ -3,17 +3,8 @@ package com.keystone.service;
 import com.keystone.dto.WorkOrderHistoryResponse;
 import com.keystone.dto.WorkOrderRequest;
 import com.keystone.dto.WorkOrderResponse;
-import com.keystone.model.Customer;
-import com.keystone.model.Site;
-import com.keystone.model.User;
-import com.keystone.model.WorkOrder;
-import com.keystone.model.WorkOrderHistory;
-import com.keystone.model.WorkOrderStatus;
-import com.keystone.repository.CustomerRepository;
-import com.keystone.repository.SiteRepository;
-import com.keystone.repository.UserRepository;
-import com.keystone.repository.WorkOrderHistoryRepository;
-import com.keystone.repository.WorkOrderRepository;
+import com.keystone.model.*;
+import com.keystone.repository.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -27,12 +18,13 @@ import java.util.List;
 @Service
 public class WorkOrderService {
 
-    private final WorkOrderRepository workOrderRepository;
-    private final CustomerRepository customerRepository;
-    private final SiteRepository siteRepository;
-    private final UserRepository userRepository;
+    private final WorkOrderRepository        workOrderRepository;
+    private final CustomerRepository         customerRepository;
+    private final SiteRepository             siteRepository;
+    private final UserRepository             userRepository;
     private final WorkOrderHistoryRepository workOrderHistoryRepository;
-    private final SlaService slaService;
+    private final SlaService                 slaService;
+    private final NotificationService        notificationService;
 
     public WorkOrderService(
             WorkOrderRepository workOrderRepository,
@@ -40,970 +32,487 @@ public class WorkOrderService {
             SiteRepository siteRepository,
             UserRepository userRepository,
             WorkOrderHistoryRepository workOrderHistoryRepository,
-            SlaService slaService) {
+            SlaService slaService,
+            NotificationService notificationService) {
 
-        this.workOrderRepository = workOrderRepository;
-        this.customerRepository = customerRepository;
-        this.siteRepository = siteRepository;
-        this.userRepository = userRepository;
+        this.workOrderRepository        = workOrderRepository;
+        this.customerRepository         = customerRepository;
+        this.siteRepository             = siteRepository;
+        this.userRepository             = userRepository;
         this.workOrderHistoryRepository = workOrderHistoryRepository;
-        this.slaService = slaService;
+        this.slaService                 = slaService;
+        this.notificationService        = notificationService;
     }
 
-    // =========================
-    // GET ALL WORK ORDERS
-    // =========================
-    public List<WorkOrderResponse> getAllWorkOrders() {
-
-        return workOrderRepository.findAll()
-                .stream()
-                .map(this::toResponse)
-                .toList();
-    }
-
-    // =========================
-    // SEARCH / FILTER / PAGINATION
-    // =========================
+    // -------------------------------------------------------
+    // LIST ALL (MANAGER / DISPATCHER)
+    // -------------------------------------------------------
     public Page<WorkOrderResponse> searchWorkOrders(
             String search,
             WorkOrderStatus status,
             String priority,
             Pageable pageable) {
 
-        boolean hasSearch =
-                search != null && !search.trim().isEmpty();
+        return doSearch(null, search, status, priority, pageable);
+    }
 
-        boolean hasStatus =
-                status != null;
+    // -------------------------------------------------------
+    // LIST — CUSTOMER PORTAL (scoped to customer)
+    // -------------------------------------------------------
+    public Page<WorkOrderResponse> searchCustomerWorkOrders(
+            Long customerId,
+            String search,
+            WorkOrderStatus status,
+            String priority,
+            Pageable pageable) {
 
-        boolean hasPriority =
-                priority != null && !priority.trim().isEmpty();
+        if (customerId == null) {
+            throw new IllegalArgumentException("Customer ID is required");
+        }
+        return doSearch(customerId, search, status, priority, pageable);
+    }
 
-        String cleanSearch =
-                hasSearch ? search.trim() : "";
+    // -------------------------------------------------------
+    // LIST — TECHNICIAN (scoped to assignee)
+    // -------------------------------------------------------
+    public Page<WorkOrderResponse> searchTechnicianWorkOrders(
+            Long assigneeId,
+            String search,
+            WorkOrderStatus status,
+            String priority,
+            Pageable pageable) {
 
-        String cleanPriority =
-                hasPriority
-                        ? priority.trim().toUpperCase()
-                        : "";
+        if (assigneeId == null) {
+            throw new IllegalArgumentException("Assignee ID is required");
+        }
+
+        boolean hasSearch   = search != null && !search.isBlank();
+        boolean hasStatus   = status != null;
+        boolean hasPriority = priority != null && !priority.isBlank();
+
+        String s = hasSearch   ? search.trim()                   : "";
+        String p = hasPriority ? priority.trim().toUpperCase()   : "";
 
         Page<WorkOrder> result;
 
         if (hasSearch && hasStatus && hasPriority) {
-
-            result =
-                    workOrderRepository
-                            .findByTitleContainingIgnoreCaseAndStatusAndPriority(
-                                    cleanSearch,
-                                    status,
-                                    cleanPriority,
-                                    pageable
-                            );
-
+            result = workOrderRepository
+                    .findByAssignee_IdAndTitleContainingIgnoreCaseAndStatusAndPriority(assigneeId, s, status, p, pageable);
         } else if (hasSearch && hasStatus) {
-
-            result =
-                    workOrderRepository
-                            .findByTitleContainingIgnoreCaseAndStatus(
-                                    cleanSearch,
-                                    status,
-                                    pageable
-                            );
-
+            result = workOrderRepository
+                    .findByAssignee_IdAndTitleContainingIgnoreCaseAndStatus(assigneeId, s, status, pageable);
         } else if (hasSearch && hasPriority) {
-
-            result =
-                    workOrderRepository
-                            .findByTitleContainingIgnoreCaseAndPriority(
-                                    cleanSearch,
-                                    cleanPriority,
-                                    pageable
-                            );
-
+            result = workOrderRepository
+                    .findByAssignee_IdAndTitleContainingIgnoreCaseAndPriority(assigneeId, s, p, pageable);
         } else if (hasStatus && hasPriority) {
-
-            result =
-                    workOrderRepository
-                            .findByStatusAndPriority(
-                                    status,
-                                    cleanPriority,
-                                    pageable
-                            );
-
+            result = workOrderRepository
+                    .findByAssignee_IdAndStatusAndPriority(assigneeId, status, p, pageable);
         } else if (hasSearch) {
-
-            result =
-                    workOrderRepository
-                            .findByTitleContainingIgnoreCase(
-                                    cleanSearch,
-                                    pageable
-                            );
-
+            result = workOrderRepository
+                    .findByAssignee_IdAndTitleContainingIgnoreCase(assigneeId, s, pageable);
         } else if (hasStatus) {
-
-            result =
-                    workOrderRepository
-                            .findByStatus(
-                                    status,
-                                    pageable
-                            );
-
+            result = workOrderRepository
+                    .findByAssignee_IdAndStatus(assigneeId, status, pageable);
         } else if (hasPriority) {
-
-            result =
-                    workOrderRepository
-                            .findByPriority(
-                                    cleanPriority,
-                                    pageable
-                            );
-
+            result = workOrderRepository
+                    .findByAssignee_IdAndPriority(assigneeId, p, pageable);
         } else {
-
-            result =
-                    workOrderRepository.findAll(pageable);
+            result = workOrderRepository
+                    .findByAssignee_Id(assigneeId, pageable);
         }
 
         return result.map(this::toResponse);
     }
 
-    // =========================
+    // -------------------------------------------------------
     // GET BY ID
-    // =========================
+    // -------------------------------------------------------
     public WorkOrderResponse getWorkOrderById(Long id) {
-
-        WorkOrder workOrder =
-                workOrderRepository.findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Work order not found"
-                                ));
-
-        return toResponse(workOrder);
+        return toResponse(findOrThrow(id));
     }
 
-    // =========================
+    // -------------------------------------------------------
     // GET BY CODE
-    // =========================
-    public WorkOrderResponse getWorkOrderByCode(
-            String code) {
-
-        WorkOrder workOrder =
-                workOrderRepository.findByCode(code)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Work order not found"
-                                ));
-
-        return toResponse(workOrder);
+    // -------------------------------------------------------
+    public WorkOrderResponse getWorkOrderByCode(String code) {
+        WorkOrder wo = workOrderRepository.findByCode(code)
+                .orElseThrow(() -> new RuntimeException("Work order not found"));
+        return toResponse(wo);
     }
 
-    // =========================
-    // GET WORK ORDER HISTORY
-    // =========================
-    public List<WorkOrderHistoryResponse> getWorkOrderHistory(
-            Long workOrderId) {
-
+    // -------------------------------------------------------
+    // GET HISTORY
+    // -------------------------------------------------------
+    public List<WorkOrderHistoryResponse> getWorkOrderHistory(Long workOrderId) {
         if (!workOrderRepository.existsById(workOrderId)) {
-
-            throw new RuntimeException(
-                    "Work order not found"
-            );
+            throw new RuntimeException("Work order not found");
         }
-
         return workOrderHistoryRepository
-                .findByWorkOrderIdOrderByChangedAtAsc(
-                        workOrderId
-                )
+                .findByWorkOrderIdOrderByChangedAtAsc(workOrderId)
                 .stream()
-                .map(history -> {
-
-                    Long changedById =
-                            history.getChangedBy() != null
-                                    ? history.getChangedBy().getId()
-                                    : null;
-
-                    String changedByEmail =
-                            history.getChangedBy() != null
-                                    ? history.getChangedBy().getEmail()
-                                    : null;
-
-                    return new WorkOrderHistoryResponse(
-                            history.getId(),
-                            history.getWorkOrder().getId(),
-                            history.getFromStatus(),
-                            history.getToStatus(),
-                            changedById,
-                            changedByEmail,
-                            history.getChangedAt(),
-                            history.getNote()
-                    );
-                })
+                .map(h -> new WorkOrderHistoryResponse(
+                        h.getId(),
+                        h.getWorkOrder().getId(),
+                        h.getFromStatus(),
+                        h.getToStatus(),
+                        h.getChangedBy() != null ? h.getChangedBy().getId()    : null,
+                        h.getChangedBy() != null ? h.getChangedBy().getEmail() : null,
+                        h.getChangedAt(),
+                        h.getNote()))
                 .toList();
     }
 
-    // =========================
-    // CREATE WORK ORDER
-    // =========================
+    // -------------------------------------------------------
+    // CREATE
+    // -------------------------------------------------------
     @Transactional
-    public WorkOrderResponse createWorkOrder(
-            WorkOrderRequest request) {
+    public WorkOrderResponse createWorkOrder(WorkOrderRequest request) {
 
         if (request == null) {
-
-            throw new IllegalArgumentException(
-                    "Work order request is required"
-            );
+            throw new IllegalArgumentException("Work order request is required");
         }
 
-        Customer customer =
-                customerRepository
-                        .findById(request.customerId())
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Customer not found"
-                                ));
+        Customer customer = customerRepository.findById(request.customerId())
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
 
-        Site site =
-                siteRepository
-                        .findById(request.siteId())
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Site not found"
-                                ));
+        Site site = siteRepository.findById(request.siteId())
+                .orElseThrow(() -> new RuntimeException("Site not found"));
 
-        // =========================
-        // SITE / CUSTOMER VALIDATION
-        // =========================
-        if (site.getCustomer() == null
-                || !site.getCustomer()
-                .getId()
-                .equals(customer.getId())) {
+        validateSiteBelongsToCustomer(site, customer);
 
-            throw new IllegalArgumentException(
-                    "Site does not belong to selected customer"
-            );
-        }
+        WorkOrder wo = new WorkOrder();
+        wo.setCode(generateWorkOrderCode());
+        wo.setTitle(request.title());
+        wo.setDescription(request.description());
+        wo.setPriority(request.priority());
+        wo.setCustomer(customer);
+        wo.setSite(site);
+        wo.setStatus(WorkOrderStatus.NEW);
+        wo.setSlaDueDate(resolveSlaDate(request.slaDueDate(), request.priority()));
 
-        // =========================
-        // BASIC VALIDATION
-        // =========================
-        if (request.title() == null
-                || request.title().isBlank()) {
+        WorkOrderStatus initialStatus = WorkOrderStatus.NEW;
 
-            throw new IllegalArgumentException(
-                    "Title is required"
-            );
-        }
-
-        if (request.description() == null
-                || request.description().isBlank()) {
-
-            throw new IllegalArgumentException(
-                    "Description is required"
-            );
-        }
-
-        if (request.priority() == null) {
-
-            throw new IllegalArgumentException(
-                    "Priority is required"
-            );
-        }
-
-        WorkOrder workOrder =
-                new WorkOrder();
-
-        // =========================
-        // BASIC DATA
-        // =========================
-        workOrder.setCode(
-                generateWorkOrderCode()
-        );
-
-        workOrder.setTitle(
-                request.title()
-        );
-
-        workOrder.setDescription(
-                request.description()
-        );
-
-        workOrder.setPriority(
-                request.priority()
-        );
-
-        workOrder.setCustomer(
-                customer
-        );
-
-        workOrder.setSite(
-                site
-        );
-
-        // =========================
-        // DEFAULT STATUS
-        // =========================
-        workOrder.setStatus(
-                WorkOrderStatus.NEW
-        );
-
-        // =========================
-        // SLA
-        // =========================
-        if (request.slaDueDate() != null) {
-
-            workOrder.setSlaDueDate(
-                    request.slaDueDate()
-            );
-
-        } else {
-
-            workOrder.setSlaDueDate(
-                    slaService.calculateDueDate(
-                            request.priority().name()
-                    )
-            );
-        }
-
-        // =========================
-        // OPTIONAL ASSIGNEE
-        // =========================
         if (request.assigneeId() != null) {
-
-            User assignee =
-                    userRepository
-                            .findById(
-                                    request.assigneeId()
-                            )
-                            .orElseThrow(() ->
-                                    new RuntimeException(
-                                            "Assignee not found"
-                                    ));
-
-            if (assignee.getRole() == null
-                    || !"TECHNICIAN".equalsIgnoreCase(
-                    assignee.getRole().name())) {
-
-                throw new IllegalArgumentException(
-                        "Selected user is not a technician"
-                );
-            }
-
-            workOrder.setAssignee(
-                    assignee
-            );
-
-            workOrder.setStatus(
-                    WorkOrderStatus.ASSIGNED
-            );
+            User assignee = resolveTechnician(request.assigneeId());
+            wo.setAssignee(assignee);
+            wo.setStatus(WorkOrderStatus.ASSIGNED);
+            initialStatus = WorkOrderStatus.ASSIGNED;
         }
 
-        WorkOrder savedWorkOrder =
-                workOrderRepository.save(
-                        workOrder
-                );
+        WorkOrder saved = workOrderRepository.save(wo);
 
-        // =========================
-        // INITIAL HISTORY
-        // =========================
-        if (request.assigneeId() != null) {
-
-            saveHistory(
-                    savedWorkOrder,
-                    WorkOrderStatus.NEW,
-                    WorkOrderStatus.ASSIGNED,
-                    "Work order assigned during creation"
-            );
-
+        if (initialStatus == WorkOrderStatus.ASSIGNED) {
+            saveHistory(saved, WorkOrderStatus.NEW, WorkOrderStatus.ASSIGNED,
+                    "Work order created and assigned");
+            notificationService.notifyTechnicianOfAssignment(saved);
         } else {
-
-            saveHistory(
-                    savedWorkOrder,
-                    null,
-                    WorkOrderStatus.NEW,
-                    "Work order created"
-            );
+            saveHistory(saved, null, WorkOrderStatus.NEW, "Work order created");
         }
 
-        return toResponse(
-                savedWorkOrder
-        );
+        return toResponse(saved);
     }
 
-    // =========================
-    // UPDATE WORK ORDER
-    // =========================
+    // -------------------------------------------------------
+    // UPDATE
+    // FIX: null assigneeId does NOT clear an existing assignee
+    // -------------------------------------------------------
     @Transactional
-    public WorkOrderResponse updateWorkOrder(
-            Long id,
-            WorkOrderRequest request) {
+    public WorkOrderResponse updateWorkOrder(Long id, WorkOrderRequest request) {
 
         if (request == null) {
-
-            throw new IllegalArgumentException(
-                    "Work order request is required"
-            );
+            throw new IllegalArgumentException("Work order request is required");
         }
 
-        WorkOrder workOrder =
-                workOrderRepository
-                        .findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Work order not found"
-                                ));
+        WorkOrder wo = findOrThrow(id);
+        assertEditable(wo);
 
-        // =========================
-        // IMMUTABILITY
-        // =========================
-        if (workOrder.getStatus()
-                == WorkOrderStatus.CLOSED
-                || workOrder.getStatus()
-                == WorkOrderStatus.CANCELLED) {
+        Customer customer = customerRepository.findById(request.customerId())
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
+        Site site = siteRepository.findById(request.siteId())
+                .orElseThrow(() -> new RuntimeException("Site not found"));
+        validateSiteBelongsToCustomer(site, customer);
 
-            throw new IllegalStateException(
-                    "Closed or cancelled work order cannot be edited"
-            );
-        }
+        boolean priorityChanged = wo.getPriority() != request.priority();
 
-        Customer customer =
-                customerRepository
-                        .findById(request.customerId())
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Customer not found"
-                                ));
+        wo.setTitle(request.title());
+        wo.setDescription(request.description());
+        wo.setPriority(request.priority());
+        wo.setCustomer(customer);
+        wo.setSite(site);
 
-        Site site =
-                siteRepository
-                        .findById(request.siteId())
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Site not found"
-                                ));
-
-        // =========================
-        // SITE / CUSTOMER VALIDATION
-        // =========================
-        if (site.getCustomer() == null
-                || !site.getCustomer()
-                .getId()
-                .equals(customer.getId())) {
-
-            throw new IllegalArgumentException(
-                    "Site does not belong to selected customer"
-            );
-        }
-
-        // =========================
-        // BASIC VALIDATION
-        // =========================
-        if (request.title() == null
-                || request.title().isBlank()) {
-
-            throw new IllegalArgumentException(
-                    "Title is required"
-            );
-        }
-
-        if (request.description() == null
-                || request.description().isBlank()) {
-
-            throw new IllegalArgumentException(
-                    "Description is required"
-            );
-        }
-
-        if (request.priority() == null) {
-
-            throw new IllegalArgumentException(
-                    "Priority is required"
-            );
-        }
-
-        // =========================
-        // CHECK PRIORITY CHANGE
-        // =========================
-        boolean priorityChanged =
-                workOrder.getPriority() != request.priority();
-
-        // =========================
-        // UPDATE DATA
-        // =========================
-        workOrder.setTitle(
-                request.title()
-        );
-
-        workOrder.setDescription(
-                request.description()
-        );
-
-        workOrder.setPriority(
-                request.priority()
-        );
-
-        workOrder.setCustomer(
-                customer
-        );
-
-        workOrder.setSite(
-                site
-        );
-
-        // =========================
-        // SLA
-        // =========================
+        // SLA: explicit override wins, else recalculate if priority changed
         if (request.slaDueDate() != null) {
-
-            workOrder.setSlaDueDate(
-                    request.slaDueDate()
-            );
-
+            wo.setSlaDueDate(request.slaDueDate());
         } else if (priorityChanged) {
-
-            workOrder.setSlaDueDate(
-                    slaService.calculateDueDate(
-                            request.priority().name()
-                    )
-            );
+            wo.setSlaDueDate(slaService.calculateDueDate(request.priority().name()));
         }
 
-        // =========================
-        // ASSIGNEE
-        // =========================
+        // ASSIGNEE: only update when explicitly provided; null = keep existing
         if (request.assigneeId() != null) {
+            User assignee = resolveTechnician(request.assigneeId());
+            boolean reassigned = wo.getAssignee() == null
+                    || !wo.getAssignee().getId().equals(assignee.getId());
 
-            User assignee =
-                    userRepository
-                            .findById(
-                                    request.assigneeId()
-                            )
-                            .orElseThrow(() ->
-                                    new RuntimeException(
-                                            "Assignee not found"
-                                    ));
+            wo.setAssignee(assignee);
 
-            if (assignee.getRole() == null
-                    || !"TECHNICIAN".equalsIgnoreCase(
-                    assignee.getRole().name())) {
-
-                throw new IllegalArgumentException(
-                        "Selected user is not a technician"
-                );
+            if (wo.getStatus() == WorkOrderStatus.NEW) {
+                WorkOrderStatus old = wo.getStatus();
+                wo.setStatus(WorkOrderStatus.ASSIGNED);
+                WorkOrder saved = workOrderRepository.save(wo);
+                saveHistory(saved, old, WorkOrderStatus.ASSIGNED,
+                        "Work order assigned during update");
+                if (reassigned) {
+                    notificationService.notifyTechnicianOfAssignment(saved);
+                }
+                return toResponse(saved);
             }
 
-            workOrder.setAssignee(
-                    assignee
-            );
-
-            // NEW -> ASSIGNED
-            if (workOrder.getStatus()
-                    == WorkOrderStatus.NEW) {
-
-                WorkOrderStatus oldStatus =
-                        workOrder.getStatus();
-
-                workOrder.setStatus(
-                        WorkOrderStatus.ASSIGNED
-                );
-
-                WorkOrder updated =
-                        workOrderRepository.save(
-                                workOrder
-                        );
-
-                saveHistory(
-                        updated,
-                        oldStatus,
-                        WorkOrderStatus.ASSIGNED,
-                        "Work order assigned during update"
-                );
-
-                return toResponse(updated);
+            if (reassigned) {
+                WorkOrder saved = workOrderRepository.save(wo);
+                notificationService.notifyTechnicianOfAssignment(saved);
+                return toResponse(saved);
             }
-
-        } else {
-
-            workOrder.setAssignee(null);
         }
+        // If assigneeId is null we intentionally leave the existing assignee untouched.
 
-        WorkOrder updatedWorkOrder =
-                workOrderRepository.save(
-                        workOrder
-                );
-
-        return toResponse(
-                updatedWorkOrder
-        );
+        return toResponse(workOrderRepository.save(wo));
     }
 
-    // =========================
-    // UPDATE STATUS
-    // =========================
+    // -------------------------------------------------------
+    // UPDATE STATUS (state machine)
+    // -------------------------------------------------------
     @Transactional
-    public WorkOrderResponse updateStatus(
-            Long id,
-            WorkOrderStatus status) {
+    public WorkOrderResponse updateStatus(Long id, WorkOrderStatus newStatus) {
 
-        if (status == null) {
-
-            throw new IllegalArgumentException(
-                    "Status is required"
-            );
+        if (newStatus == null) {
+            throw new IllegalArgumentException("Status is required");
         }
 
-        WorkOrder workOrder =
-                workOrderRepository
-                        .findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Work order not found"
-                                ));
+        WorkOrder wo = findOrThrow(id);
+        WorkOrderStatus old = wo.getStatus();
 
-        WorkOrderStatus oldStatus =
-                workOrder.getStatus();
-
-        if (oldStatus == status) {
-            return toResponse(workOrder);
+        if (old == newStatus) {
+            return toResponse(wo);
         }
 
-        // =========================
-        // GUARDED STATE MACHINE
-        // =========================
-        validateTransition(
-                oldStatus,
-                status
-        );
+        validateTransition(old, newStatus);
+        wo.setStatus(newStatus);
 
-        workOrder.setStatus(
-                status
-        );
-
-        WorkOrder updatedWorkOrder =
-                workOrderRepository.save(
-                        workOrder
-                );
-
-        saveHistory(
-                updatedWorkOrder,
-                oldStatus,
-                status,
-                "Status changed"
-        );
-
-        return toResponse(
-                updatedWorkOrder
-        );
+        WorkOrder saved = workOrderRepository.save(wo);
+        saveHistory(saved, old, newStatus, "Status changed");
+        return toResponse(saved);
     }
 
-    // =========================
-    // ASSIGN WORK ORDER
-    // =========================
+    // -------------------------------------------------------
+    // ASSIGN
+    // -------------------------------------------------------
     @Transactional
-    public WorkOrderResponse assignWorkOrder(
-            Long id,
-            Long assigneeId) {
+    public WorkOrderResponse assignWorkOrder(Long id, Long assigneeId) {
 
-        WorkOrder workOrder =
-                workOrderRepository
-                        .findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Work order not found"
-                                ));
+        WorkOrder wo = findOrThrow(id);
 
-        // Cannot assign closed/cancelled
-        if (workOrder.getStatus()
-                == WorkOrderStatus.CLOSED
-                || workOrder.getStatus()
-                == WorkOrderStatus.CANCELLED) {
-
+        if (wo.getStatus() == WorkOrderStatus.CLOSED
+                || wo.getStatus() == WorkOrderStatus.CANCELLED) {
             throw new IllegalStateException(
-                    "Cannot assign closed or cancelled work order"
-            );
+                    "Cannot assign a closed or cancelled work order");
         }
 
-        User assignee =
-                userRepository
-                        .findById(assigneeId)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Assignee not found"
-                                ));
+        User assignee = resolveTechnician(assigneeId);
+        boolean reassigned = wo.getAssignee() == null
+                || !wo.getAssignee().getId().equals(assignee.getId());
 
-        // Must be technician
-        if (assignee.getRole() == null
-                || !"TECHNICIAN".equalsIgnoreCase(
-                assignee.getRole().name())) {
+        WorkOrderStatus old = wo.getStatus();
+        wo.setAssignee(assignee);
 
-            throw new IllegalArgumentException(
-                    "Selected user is not a technician"
-            );
+        if (old == WorkOrderStatus.NEW) {
+            wo.setStatus(WorkOrderStatus.ASSIGNED);
         }
 
-        WorkOrderStatus oldStatus =
-                workOrder.getStatus();
+        WorkOrder saved = workOrderRepository.save(wo);
 
-        workOrder.setAssignee(
-                assignee
-        );
-
-        // NEW -> ASSIGNED
-        if (oldStatus == WorkOrderStatus.NEW) {
-
-            workOrder.setStatus(
-                    WorkOrderStatus.ASSIGNED
-            );
+        if (old != saved.getStatus()) {
+            saveHistory(saved, old, saved.getStatus(), "Work order assigned to technician");
         }
 
-        WorkOrder updatedWorkOrder =
-                workOrderRepository.save(
-                        workOrder
-                );
-
-        // Save history only if status changed
-        if (oldStatus != updatedWorkOrder.getStatus()) {
-
-            saveHistory(
-                    updatedWorkOrder,
-                    oldStatus,
-                    updatedWorkOrder.getStatus(),
-                    "Work order assigned to technician"
-            );
+        if (reassigned) {
+            notificationService.notifyTechnicianOfAssignment(saved);
         }
 
-        return toResponse(
-                updatedWorkOrder
-        );
+        return toResponse(saved);
     }
 
-    // =========================
-    // DELETE
-    // =========================
+    // -------------------------------------------------------
+    // DELETE (MANAGER only — enforced at controller level)
+    // -------------------------------------------------------
     @Transactional
     public void deleteWorkOrder(Long id) {
-
         if (!workOrderRepository.existsById(id)) {
-
-            throw new RuntimeException(
-                    "Work order not found"
-            );
+            throw new RuntimeException("Work order not found");
         }
-
         workOrderRepository.deleteById(id);
     }
 
-    // =========================
-    // STATE MACHINE
-    // =========================
-    private void validateTransition(
-            WorkOrderStatus from,
-            WorkOrderStatus to) {
+    // -------------------------------------------------------
+    // PRIVATE HELPERS
+    // -------------------------------------------------------
 
-        if (from == null) {
-            return;
+    private WorkOrder findOrThrow(Long id) {
+        return workOrderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Work order not found"));
+    }
+
+    private void assertEditable(WorkOrder wo) {
+        if (wo.getStatus() == WorkOrderStatus.CLOSED
+                || wo.getStatus() == WorkOrderStatus.CANCELLED) {
+            throw new IllegalStateException(
+                    "Closed or cancelled work order cannot be edited");
         }
+    }
 
-        boolean allowed;
-
-        switch (from) {
-
-            case NEW:
-
-                allowed =
-                        to == WorkOrderStatus.ASSIGNED
-                                || to == WorkOrderStatus.CANCELLED;
-
-                break;
-
-            case ASSIGNED:
-
-                allowed =
-                        to == WorkOrderStatus.IN_PROGRESS
-                                || to == WorkOrderStatus.CANCELLED;
-
-                break;
-
-            case IN_PROGRESS:
-
-                allowed =
-                        to == WorkOrderStatus.ON_HOLD
-                                || to == WorkOrderStatus.COMPLETED;
-
-                break;
-
-            case ON_HOLD:
-
-                allowed =
-                        to == WorkOrderStatus.IN_PROGRESS
-                                || to == WorkOrderStatus.CANCELLED;
-
-                break;
-
-            case COMPLETED:
-
-                allowed =
-                        to == WorkOrderStatus.CLOSED;
-
-                break;
-
-            case CLOSED:
-
-            case CANCELLED:
-
-                allowed = false;
-
-                break;
-
-            default:
-
-                allowed = false;
+    private void validateSiteBelongsToCustomer(Site site, Customer customer) {
+        if (site.getCustomer() == null
+                || !site.getCustomer().getId().equals(customer.getId())) {
+            throw new IllegalArgumentException(
+                    "Site does not belong to the selected customer");
         }
+    }
+
+    private User resolveTechnician(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Assignee not found"));
+        if (user.getRole() != Role.TECHNICIAN) {
+            throw new IllegalArgumentException("Selected user is not a technician");
+        }
+        return user;
+    }
+
+    private LocalDateTime resolveSlaDate(LocalDateTime explicit, Priority priority) {
+        if (explicit != null) return explicit;
+        return slaService.calculateDueDate(priority.name());
+    }
+
+    /**
+     * Guarded state machine — only the transitions shown in the brief are allowed.
+     */
+    private void validateTransition(WorkOrderStatus from, WorkOrderStatus to) {
+
+        boolean allowed = switch (from) {
+            case NEW         -> to == WorkOrderStatus.ASSIGNED  || to == WorkOrderStatus.CANCELLED;
+            case ASSIGNED    -> to == WorkOrderStatus.IN_PROGRESS || to == WorkOrderStatus.CANCELLED;
+            case IN_PROGRESS -> to == WorkOrderStatus.ON_HOLD   || to == WorkOrderStatus.COMPLETED;
+            case ON_HOLD     -> to == WorkOrderStatus.IN_PROGRESS || to == WorkOrderStatus.CANCELLED;
+            case COMPLETED   -> to == WorkOrderStatus.CLOSED;
+            case CLOSED, CANCELLED -> false;
+        };
 
         if (!allowed) {
-
             throw new IllegalStateException(
-                    "Invalid status transition from "
-                            + from
-                            + " to "
-                            + to
-            );
+                    "Invalid status transition from " + from + " to " + to);
         }
     }
 
-    // =========================
-    // SAVE STATUS HISTORY
-    // =========================
-    private void saveHistory(
-            WorkOrder workOrder,
-            WorkOrderStatus fromStatus,
-            WorkOrderStatus toStatus,
-            String note) {
+    private void saveHistory(WorkOrder wo,
+                             WorkOrderStatus from,
+                             WorkOrderStatus to,
+                             String note) {
 
-        WorkOrderHistory history =
-                new WorkOrderHistory();
+        WorkOrderHistory h = new WorkOrderHistory();
+        h.setWorkOrder(wo);
+        h.setFromStatus(from);
+        h.setToStatus(to);
+        h.setChangedAt(LocalDateTime.now());
+        h.setNote(note);
 
-        history.setWorkOrder(
-                workOrder
-        );
-
-        history.setFromStatus(
-                fromStatus
-        );
-
-        history.setToStatus(
-                toStatus
-        );
-
-        history.setChangedAt(
-                LocalDateTime.now()
-        );
-
-        history.setNote(
-                note
-        );
-
-        // =========================
-        // CURRENT AUTHENTICATED USER
-        // =========================
-        Authentication authentication =
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication();
-
-        if (authentication != null
-                && authentication.isAuthenticated()
-                && authentication.getName() != null) {
-
-            String email =
-                    authentication.getName();
-
-            userRepository
-                    .findByEmail(email)
-                    .ifPresent(history::setChangedBy);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getName() != null) {
+            userRepository.findByEmail(auth.getName()).ifPresent(h::setChangedBy);
         }
 
-        workOrderHistoryRepository.save(
-                history
-        );
+        workOrderHistoryRepository.save(h);
     }
 
-    // =========================
-    // GENERATE WORK ORDER CODE
-    // =========================
     private String generateWorkOrderCode() {
-
-        long nextNumber =
-                workOrderRepository.count() + 1;
-
+        long next = workOrderRepository.count() + 1;
         String code;
-
         do {
-
-            code = String.format(
-                    "WO-%05d",
-                    nextNumber++
-            );
-
-        } while (
-                workOrderRepository
-                        .findByCode(code)
-                        .isPresent()
-        );
-
+            code = String.format("WO-%05d", next++);
+        } while (workOrderRepository.findByCode(code).isPresent());
         return code;
     }
 
-    // =========================
-    // ENTITY -> RESPONSE DTO
-    // =========================
-    private WorkOrderResponse toResponse(
-            WorkOrder workOrder) {
+    /** Centralised search — pass null customerId for all-customer queries. */
+    private Page<WorkOrderResponse> doSearch(
+            Long customerId,
+            String search,
+            WorkOrderStatus status,
+            String priority,
+            Pageable pageable) {
 
-        Long customerId =
-                workOrder.getCustomer() != null
-                        ? workOrder.getCustomer().getId()
-                        : null;
+        boolean hasSearch   = search != null && !search.isBlank();
+        boolean hasStatus   = status != null;
+        boolean hasPriority = priority != null && !priority.isBlank();
 
-        String customerName =
-                workOrder.getCustomer() != null
-                        ? workOrder.getCustomer().getCompanyName()
-                        : null;
+        String s = hasSearch   ? search.trim()                 : "";
+        String p = hasPriority ? priority.trim().toUpperCase() : "";
 
-        Long siteId =
-                workOrder.getSite() != null
-                        ? workOrder.getSite().getId()
-                        : null;
+        Page<WorkOrder> result;
 
-        String siteName =
-                workOrder.getSite() != null
-                        ? workOrder.getSite().getName()
-                        : null;
+        if (customerId == null) {
+            // Manager / Dispatcher — unrestricted
+            if (hasSearch && hasStatus && hasPriority)
+                result = workOrderRepository.findByTitleContainingIgnoreCaseAndStatusAndPriority(s, status, p, pageable);
+            else if (hasSearch && hasStatus)
+                result = workOrderRepository.findByTitleContainingIgnoreCaseAndStatus(s, status, pageable);
+            else if (hasSearch && hasPriority)
+                result = workOrderRepository.findByTitleContainingIgnoreCaseAndPriority(s, p, pageable);
+            else if (hasStatus && hasPriority)
+                result = workOrderRepository.findByStatusAndPriority(status, p, pageable);
+            else if (hasSearch)
+                result = workOrderRepository.findByTitleContainingIgnoreCase(s, pageable);
+            else if (hasStatus)
+                result = workOrderRepository.findByStatus(status, pageable);
+            else if (hasPriority)
+                result = workOrderRepository.findByPriority(p, pageable);
+            else
+                result = workOrderRepository.findAll(pageable);
+        } else {
+            // Customer portal — scoped
+            if (hasSearch && hasStatus && hasPriority)
+                result = workOrderRepository.findByCustomer_IdAndTitleContainingIgnoreCaseAndStatusAndPriority(customerId, s, status, p, pageable);
+            else if (hasSearch && hasStatus)
+                result = workOrderRepository.findByCustomer_IdAndTitleContainingIgnoreCaseAndStatus(customerId, s, status, pageable);
+            else if (hasSearch && hasPriority)
+                result = workOrderRepository.findByCustomer_IdAndTitleContainingIgnoreCaseAndPriority(customerId, s, p, pageable);
+            else if (hasStatus && hasPriority)
+                result = workOrderRepository.findByCustomer_IdAndStatusAndPriority(customerId, status, p, pageable);
+            else if (hasSearch)
+                result = workOrderRepository.findByCustomer_IdAndTitleContainingIgnoreCase(customerId, s, pageable);
+            else if (hasStatus)
+                result = workOrderRepository.findByCustomer_IdAndStatus(customerId, status, pageable);
+            else if (hasPriority)
+                result = workOrderRepository.findByCustomer_IdAndPriority(customerId, p, pageable);
+            else
+                result = workOrderRepository.findByCustomer_Id(customerId, pageable);
+        }
 
-        Long assigneeId =
-                workOrder.getAssignee() != null
-                        ? workOrder.getAssignee().getId()
-                        : null;
+        return result.map(this::toResponse);
+    }
 
-        String assigneeEmail =
-                workOrder.getAssignee() != null
-                        ? workOrder.getAssignee().getEmail()
-                        : null;
-
+    public WorkOrderResponse toResponse(WorkOrder wo) {
         return new WorkOrderResponse(
-                workOrder.getId(),
-                workOrder.getCode(),
-                workOrder.getTitle(),
-                workOrder.getDescription(),
-                workOrder.getPriority(),
-                workOrder.getStatus(),
-                workOrder.getSlaDueDate(),
-                customerId,
-                customerName,
-                siteId,
-                siteName,
-                assigneeId,
-                assigneeEmail
+                wo.getId(),
+                wo.getCode(),
+                wo.getTitle(),
+                wo.getDescription(),
+                wo.getPriority(),
+                wo.getStatus(),
+                wo.getSlaDueDate(),
+                wo.getCustomer() != null ? wo.getCustomer().getId()          : null,
+                wo.getCustomer() != null ? wo.getCustomer().getCompanyName() : null,
+                wo.getSite()     != null ? wo.getSite().getId()               : null,
+                wo.getSite()     != null ? wo.getSite().getName()             : null,
+                wo.getAssignee() != null ? wo.getAssignee().getId()           : null,
+                wo.getAssignee() != null ? wo.getAssignee().getEmail()        : null
         );
     }
 }

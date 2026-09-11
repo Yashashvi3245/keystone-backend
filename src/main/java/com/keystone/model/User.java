@@ -25,6 +25,13 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
+    // =========================
+    // CUSTOMER RELATIONSHIP
+    // =========================
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
+
     public User() {
     }
 
@@ -74,5 +81,13 @@ public class User {
 
     public void setRole(Role role) {
         this.role = role;
+    }
+
+    public Customer getCustomer() {
+        return customer;
+    }
+
+    public void setCustomer(Customer customer) {
+        this.customer = customer;
     }
 }

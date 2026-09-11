@@ -1,0 +1,121 @@
+version: "3.9"
+
+# =====================================================================
+# KEYSTONE — Docker Compose
+#
+# Services
+#   postgres  PostgreSQL 16 database           (internal only)
+#   backend   Spring Boot REST API             → http://localhost:8080
+#   frontend  React SPA served by nginx        → http://localhost
+#
+# Quick start (after copying .env.example → .env and setting secrets):
+#   docker compose up --build
+#
+# URLs once running:
+#   Frontend  → http://localhost
+#   API       → http://localhost:8080/api
+#   Swagger   → http://localhost:8080/swagger-ui.html
+# =====================================================================
+
+services:
+
+  # ──────────────────────────────────────────────────────────────────
+  # PostgreSQL 16
+  # ──────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: keystone-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-keystone}
+      POSTGRES_USER:     ${POSTGRES_USER:-keystone_user}
+      # Require password — fails fast if not set
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      # Named volume keeps data across container restarts
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Exposed on 5433 to avoid colliding with a local Postgres on 5432
+      - "5433:5432"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "pg_isready -U ${POSTGRES_USER:-keystone_user} -d ${POSTGRES_DB:-keystone}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - keystone-net
+
+  # ──────────────────────────────────────────────────────────────────
+  # Spring Boot Backend
+  # ──────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .          # project root — contains the backend Dockerfile
+      dockerfile: Dockerfile
+    container_name: keystone-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy   # wait until Postgres passes its health check
+    environment:
+      # ── Database ──
+      DB_URL:      jdbc:postgresql://postgres:5432/${POSTGRES_DB:-keystone}
+      DB_USERNAME: ${POSTGRES_USER:-keystone_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      # ── JWT ──
+      JWT_SECRET:     ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      # ── Spring overrides ──
+      # Baseline Flyway so it works on both fresh and existing databases
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      SPRING_FLYWAY_BASELINE_VERSION:    "0"
+      # 'update' is safe for dev/demo; change to 'validate' once schema is stable
+      SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+      # Suppress open-in-view warning
+      SPRING_JPA_OPEN_IN_VIEW: "false"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      # wget is available in alpine-based images; checks that the auth endpoint responds
+      test:
+        - "CMD-SHELL"
+        - >
+          wget --quiet --spider --server-response
+          http://localhost:8080/api/auth/login 2>&1
+          | grep -qE "HTTP/(1|2).*[24][0-9][0-9]"
+          || exit 1
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 60s
+    networks:
+      - keystone-net
+
+  # ──────────────────────────────────────────────────────────────────
+  # React Frontend (nginx)
+  # ──────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend   # frontend sub-directory — contains its own Dockerfile
+      dockerfile: Dockerfile
+    container_name: keystone-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend             # start after backend (no strict health check needed)
+    ports:
+      - "80:80"
+    networks:
+      - keystone-net
+
+# ── Named volumes ──────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+
+# ── Networks ───────────────────────────────────────────────────────────
+networks:
+  keystone-net:
+    driver: bridge
