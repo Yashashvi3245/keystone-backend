@@ -1,5 +1,6 @@
 package com.keystone.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 
@@ -28,6 +29,7 @@ public class User {
     // =========================
     // CUSTOMER RELATIONSHIP
     // =========================
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
     private Customer customer;
