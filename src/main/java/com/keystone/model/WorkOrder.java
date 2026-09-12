@@ -1,6 +1,5 @@
 package com.keystone.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -32,24 +31,37 @@ public class WorkOrder {
     @Column(nullable = false)
     private LocalDateTime slaDueDate;
 
-    @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY)
+    // =========================
+    // CUSTOMER
+    // =========================
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
-    @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY)
+    // =========================
+    // SITE
+    // =========================
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "site_id", nullable = false)
     private Site site;
 
-    @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY)
+    // =========================
+    // ASSIGNEE
+    // =========================
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "assignee_id")
     private User assignee;
 
+    // =========================
+    // CONSTRUCTOR
+    // =========================
     public WorkOrder() {
         this.status = WorkOrderStatus.NEW;
     }
+
+    // =========================
+    // GETTERS / SETTERS
+    // =========================
 
     public Long getId() {
         return id;
