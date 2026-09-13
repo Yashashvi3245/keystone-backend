@@ -61,7 +61,7 @@ public class SecurityConfig {
                                 "/api/auth/**"
                         ).permitAll()
 
-                        // Swagger / OpenAPI docs (browsable without login)
+                        // Swagger / OpenAPI docs
                         .requestMatchers(
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
@@ -71,13 +71,12 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // TEMPORARY:
-                        // password reset without token
+                        // Password reset
                         .requestMatchers(
                                 "/api/users/reset-password"
                         ).permitAll()
 
-                        // All other user APIs require login
+                        // All other user APIs
                         .requestMatchers(
                                 "/api/users/**"
                         ).authenticated()
@@ -116,7 +115,10 @@ public class SecurityConfig {
                 new CorsConfiguration();
 
         configuration.setAllowedOrigins(
-                List.of("http://localhost:5173")
+                List.of(
+                        "http://localhost:5173",
+                        "https://keystone-frontend-9wlj.onrender.com"
+                )
         );
 
         configuration.setAllowedMethods(
