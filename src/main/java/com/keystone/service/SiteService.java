@@ -5,6 +5,7 @@ import com.keystone.model.Site;
 import com.keystone.repository.CustomerRepository;
 import com.keystone.repository.SiteRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,21 +23,25 @@ public class SiteService {
     }
 
     // Get all sites
+    @Transactional(readOnly = true)
     public List<Site> getAllSites() {
         return siteRepository.findAll();
     }
 
     // Get site by ID
+    @Transactional(readOnly = true)
     public Optional<Site> getSiteById(Long id) {
         return siteRepository.findById(id);
     }
 
     // Get all sites belonging to a customer
+    @Transactional(readOnly = true)
     public List<Site> getSitesByCustomerId(Long customerId) {
         return siteRepository.findByCustomerId(customerId);
     }
 
     // Create site for a customer
+    @Transactional
     public Optional<Site> createSite(Long customerId, Site site) {
 
         return customerRepository.findById(customerId)
@@ -47,6 +52,7 @@ public class SiteService {
     }
 
     // Update site
+    @Transactional
     public Optional<Site> updateSite(Long id, Site updatedSite) {
 
         return siteRepository.findById(id)
@@ -63,6 +69,7 @@ public class SiteService {
     }
 
     // Delete site
+    @Transactional
     public boolean deleteSite(Long id) {
 
         if (!siteRepository.existsById(id)) {

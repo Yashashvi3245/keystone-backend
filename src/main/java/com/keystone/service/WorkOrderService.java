@@ -18,13 +18,13 @@ import java.util.List;
 @Service
 public class WorkOrderService {
 
-    private final WorkOrderRepository        workOrderRepository;
-    private final CustomerRepository         customerRepository;
-    private final SiteRepository             siteRepository;
-    private final UserRepository             userRepository;
+    private final WorkOrderRepository workOrderRepository;
+    private final CustomerRepository customerRepository;
+    private final SiteRepository siteRepository;
+    private final UserRepository userRepository;
     private final WorkOrderHistoryRepository workOrderHistoryRepository;
-    private final SlaService                 slaService;
-    private final NotificationService        notificationService;
+    private final SlaService slaService;
+    private final NotificationService notificationService;
 
     public WorkOrderService(
             WorkOrderRepository workOrderRepository,
@@ -35,18 +35,19 @@ public class WorkOrderService {
             SlaService slaService,
             NotificationService notificationService) {
 
-        this.workOrderRepository        = workOrderRepository;
-        this.customerRepository         = customerRepository;
-        this.siteRepository             = siteRepository;
-        this.userRepository             = userRepository;
+        this.workOrderRepository = workOrderRepository;
+        this.customerRepository = customerRepository;
+        this.siteRepository = siteRepository;
+        this.userRepository = userRepository;
         this.workOrderHistoryRepository = workOrderHistoryRepository;
-        this.slaService                 = slaService;
-        this.notificationService        = notificationService;
+        this.slaService = slaService;
+        this.notificationService = notificationService;
     }
 
-    // -------------------------------------------------------
-    // LIST ALL (MANAGER / DISPATCHER)
-    // -------------------------------------------------------
+    // =======================================================
+    // LIST ALL - MANAGER / DISPATCHER
+    // =======================================================
+
     @Transactional(readOnly = true)
     public Page<WorkOrderResponse> searchWorkOrders(
             String search,
@@ -57,9 +58,10 @@ public class WorkOrderService {
         return doSearch(null, search, status, priority, pageable);
     }
 
-    // -------------------------------------------------------
-    // LIST — CUSTOMER PORTAL (scoped to customer)
-    // -------------------------------------------------------
+    // =======================================================
+    // LIST - CUSTOMER
+    // =======================================================
+
     @Transactional(readOnly = true)
     public Page<WorkOrderResponse> searchCustomerWorkOrders(
             Long customerId,
@@ -72,12 +74,19 @@ public class WorkOrderService {
             throw new IllegalArgumentException("Customer ID is required");
         }
 
-        return doSearch(customerId, search, status, priority, pageable);
+        return doSearch(
+                customerId,
+                search,
+                status,
+                priority,
+                pageable
+        );
     }
 
-    // -------------------------------------------------------
-    // LIST — TECHNICIAN (scoped to assignee)
-    // -------------------------------------------------------
+    // =======================================================
+    // LIST - TECHNICIAN
+    // =======================================================
+
     @Transactional(readOnly = true)
     public Page<WorkOrderResponse> searchTechnicianWorkOrders(
             Long assigneeId,
@@ -87,159 +96,193 @@ public class WorkOrderService {
             Pageable pageable) {
 
         if (assigneeId == null) {
-            throw new IllegalArgumentException("Assignee ID is required");
+            throw new IllegalArgumentException(
+                    "Assignee ID is required"
+            );
         }
 
-        boolean hasSearch   = search != null && !search.isBlank();
-        boolean hasStatus   = status != null;
-        boolean hasPriority = priority != null && !priority.isBlank();
+        boolean hasSearch =
+                search != null && !search.isBlank();
 
-        String s = hasSearch
-                ? search.trim()
-                : "";
+        boolean hasStatus =
+                status != null;
 
-        String p = hasPriority
-                ? priority.trim().toUpperCase()
-                : "";
+        boolean hasPriority =
+                priority != null && !priority.isBlank();
+
+        String s =
+                hasSearch
+                        ? search.trim()
+                        : "";
+
+        // IMPORTANT:
+        // Repository expects String priority
+        String p =
+                hasPriority
+                        ? priority.trim().toUpperCase()
+                        : "";
 
         Page<WorkOrder> result;
 
         if (hasSearch && hasStatus && hasPriority) {
 
-            result = workOrderRepository
-                    .findByAssignee_IdAndTitleContainingIgnoreCaseAndStatusAndPriority(
-                            assigneeId,
-                            s,
-                            status,
-                            p,
-                            pageable
-                    );
+            result =
+                    workOrderRepository
+                            .findByAssignee_IdAndTitleContainingIgnoreCaseAndStatusAndPriority(
+                                    assigneeId,
+                                    s,
+                                    status,
+                                    p,
+                                    pageable
+                            );
 
         } else if (hasSearch && hasStatus) {
 
-            result = workOrderRepository
-                    .findByAssignee_IdAndTitleContainingIgnoreCaseAndStatus(
-                            assigneeId,
-                            s,
-                            status,
-                            pageable
-                    );
+            result =
+                    workOrderRepository
+                            .findByAssignee_IdAndTitleContainingIgnoreCaseAndStatus(
+                                    assigneeId,
+                                    s,
+                                    status,
+                                    pageable
+                            );
 
         } else if (hasSearch && hasPriority) {
 
-            result = workOrderRepository
-                    .findByAssignee_IdAndTitleContainingIgnoreCaseAndPriority(
-                            assigneeId,
-                            s,
-                            p,
-                            pageable
-                    );
+            result =
+                    workOrderRepository
+                            .findByAssignee_IdAndTitleContainingIgnoreCaseAndPriority(
+                                    assigneeId,
+                                    s,
+                                    p,
+                                    pageable
+                            );
 
         } else if (hasStatus && hasPriority) {
 
-            result = workOrderRepository
-                    .findByAssignee_IdAndStatusAndPriority(
-                            assigneeId,
-                            status,
-                            p,
-                            pageable
-                    );
+            result =
+                    workOrderRepository
+                            .findByAssignee_IdAndStatusAndPriority(
+                                    assigneeId,
+                                    status,
+                                    p,
+                                    pageable
+                            );
 
         } else if (hasSearch) {
 
-            result = workOrderRepository
-                    .findByAssignee_IdAndTitleContainingIgnoreCase(
-                            assigneeId,
-                            s,
-                            pageable
-                    );
+            result =
+                    workOrderRepository
+                            .findByAssignee_IdAndTitleContainingIgnoreCase(
+                                    assigneeId,
+                                    s,
+                                    pageable
+                            );
 
         } else if (hasStatus) {
 
-            result = workOrderRepository
-                    .findByAssignee_IdAndStatus(
-                            assigneeId,
-                            status,
-                            pageable
-                    );
+            result =
+                    workOrderRepository
+                            .findByAssignee_IdAndStatus(
+                                    assigneeId,
+                                    status,
+                                    pageable
+                            );
 
         } else if (hasPriority) {
 
-            result = workOrderRepository
-                    .findByAssignee_IdAndPriority(
-                            assigneeId,
-                            p,
-                            pageable
-                    );
+            result =
+                    workOrderRepository
+                            .findByAssignee_IdAndPriority(
+                                    assigneeId,
+                                    p,
+                                    pageable
+                            );
 
         } else {
 
-            result = workOrderRepository
-                    .findByAssignee_Id(
-                            assigneeId,
-                            pageable
-                    );
+            result =
+                    workOrderRepository
+                            .findByAssignee_Id(
+                                    assigneeId,
+                                    pageable
+                            );
         }
 
         return result.map(this::toResponse);
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // GET BY ID
-    // -------------------------------------------------------
+    // =======================================================
+
     @Transactional(readOnly = true)
     public WorkOrderResponse getWorkOrderById(Long id) {
 
-        return toResponse(findOrThrow(id));
+        return toResponse(
+                findOrThrow(id)
+        );
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // GET BY CODE
-    // -------------------------------------------------------
+    // =======================================================
+
     @Transactional(readOnly = true)
     public WorkOrderResponse getWorkOrderByCode(String code) {
 
-        WorkOrder wo = workOrderRepository.findByCode(code)
-                .orElseThrow(() ->
-                        new RuntimeException("Work order not found"));
+        WorkOrder wo =
+                workOrderRepository
+                        .findByCode(code)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Work order not found"
+                                )
+                        );
 
         return toResponse(wo);
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // GET HISTORY
-    // -------------------------------------------------------
+    // =======================================================
+
     @Transactional(readOnly = true)
     public List<WorkOrderHistoryResponse> getWorkOrderHistory(
             Long workOrderId) {
 
         if (!workOrderRepository.existsById(workOrderId)) {
-            throw new RuntimeException("Work order not found");
+            throw new RuntimeException(
+                    "Work order not found"
+            );
         }
 
         return workOrderHistoryRepository
                 .findByWorkOrderIdOrderByChangedAtAsc(workOrderId)
                 .stream()
-                .map(h -> new WorkOrderHistoryResponse(
-                        h.getId(),
-                        h.getWorkOrder().getId(),
-                        h.getFromStatus(),
-                        h.getToStatus(),
-                        h.getChangedBy() != null
-                                ? h.getChangedBy().getId()
-                                : null,
-                        h.getChangedBy() != null
-                                ? h.getChangedBy().getEmail()
-                                : null,
-                        h.getChangedAt(),
-                        h.getNote()
-                ))
+                .map(h ->
+                        new WorkOrderHistoryResponse(
+                                h.getId(),
+                                h.getWorkOrder().getId(),
+                                h.getFromStatus(),
+                                h.getToStatus(),
+                                h.getChangedBy() != null
+                                        ? h.getChangedBy().getId()
+                                        : null,
+                                h.getChangedBy() != null
+                                        ? h.getChangedBy().getEmail()
+                                        : null,
+                                h.getChangedAt(),
+                                h.getNote()
+                        )
+                )
                 .toList();
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // CREATE
-    // -------------------------------------------------------
+    // =======================================================
+
     @Transactional
     public WorkOrderResponse createWorkOrder(
             WorkOrderRequest request) {
@@ -251,7 +294,8 @@ public class WorkOrderService {
         }
 
         Customer customer =
-                customerRepository.findById(request.customerId())
+                customerRepository
+                        .findById(request.customerId())
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Customer not found"
@@ -259,7 +303,8 @@ public class WorkOrderService {
                         );
 
         Site site =
-                siteRepository.findById(request.siteId())
+                siteRepository
+                        .findById(request.siteId())
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Site not found"
@@ -271,7 +316,8 @@ public class WorkOrderService {
                 customer
         );
 
-        WorkOrder wo = new WorkOrder();
+        WorkOrder wo =
+                new WorkOrder();
 
         wo.setCode(
                 generateWorkOrderCode()
@@ -314,6 +360,7 @@ public class WorkOrderService {
         // ---------------------------------------------------
         // OPTIONAL ASSIGNEE
         // ---------------------------------------------------
+
         if (request.assigneeId() != null) {
 
             User assignee =
@@ -339,6 +386,7 @@ public class WorkOrderService {
         // ---------------------------------------------------
         // HISTORY + NOTIFICATION
         // ---------------------------------------------------
+
         if (initialStatus == WorkOrderStatus.ASSIGNED) {
 
             saveHistory(
@@ -349,7 +397,9 @@ public class WorkOrderService {
             );
 
             notificationService
-                    .notifyTechnicianOfAssignment(saved);
+                    .notifyTechnicianOfAssignment(
+                            saved
+                    );
 
         } else {
 
@@ -364,10 +414,10 @@ public class WorkOrderService {
         return toResponse(saved);
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // UPDATE
-    // FIX: null assigneeId DOES NOT clear existing assignee
-    // -------------------------------------------------------
+    // =======================================================
+
     @Transactional
     public WorkOrderResponse updateWorkOrder(
             Long id,
@@ -385,9 +435,8 @@ public class WorkOrderService {
         assertEditable(wo);
 
         Customer customer =
-                customerRepository.findById(
-                                request.customerId()
-                        )
+                customerRepository
+                        .findById(request.customerId())
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Customer not found"
@@ -395,9 +444,8 @@ public class WorkOrderService {
                         );
 
         Site site =
-                siteRepository.findById(
-                                request.siteId()
-                        )
+                siteRepository
+                        .findById(request.siteId())
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Site not found"
@@ -435,6 +483,7 @@ public class WorkOrderService {
         // ---------------------------------------------------
         // SLA
         // ---------------------------------------------------
+
         if (request.slaDueDate() != null) {
 
             wo.setSlaDueDate(
@@ -452,9 +501,9 @@ public class WorkOrderService {
 
         // ---------------------------------------------------
         // ASSIGNEE
-        // Only update when explicitly provided.
-        // null = keep existing.
+        // null = keep existing
         // ---------------------------------------------------
+
         if (request.assigneeId() != null) {
 
             User assignee =
@@ -466,13 +515,16 @@ public class WorkOrderService {
                     wo.getAssignee() == null
                             || !wo.getAssignee()
                             .getId()
-                            .equals(assignee.getId());
+                            .equals(
+                                    assignee.getId()
+                            );
 
             wo.setAssignee(
                     assignee
             );
 
             // NEW -> ASSIGNED
+
             if (wo.getStatus()
                     == WorkOrderStatus.NEW) {
 
@@ -504,7 +556,8 @@ public class WorkOrderService {
                 return toResponse(saved);
             }
 
-            // REASSIGN EXISTING WORK ORDER
+            // REASSIGN
+
             if (reassigned) {
 
                 WorkOrder saved =
@@ -519,19 +572,15 @@ public class WorkOrderService {
             }
         }
 
-        // ---------------------------------------------------
-        // NULL ASSIGNEE = KEEP EXISTING ASSIGNEE
-        // ---------------------------------------------------
-
         return toResponse(
                 workOrderRepository.save(wo)
         );
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // UPDATE STATUS
-    // GUARDED STATE MACHINE
-    // -------------------------------------------------------
+    // =======================================================
+
     @Transactional
     public WorkOrderResponse updateStatus(
             Long id,
@@ -575,9 +624,10 @@ public class WorkOrderService {
         return toResponse(saved);
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // ASSIGN
-    // -------------------------------------------------------
+    // =======================================================
+
     @Transactional
     public WorkOrderResponse assignWorkOrder(
             Long id,
@@ -605,7 +655,9 @@ public class WorkOrderService {
                 wo.getAssignee() == null
                         || !wo.getAssignee()
                         .getId()
-                        .equals(assignee.getId());
+                        .equals(
+                                assignee.getId()
+                        );
 
         WorkOrderStatus old =
                 wo.getStatus();
@@ -614,7 +666,6 @@ public class WorkOrderService {
                 assignee
         );
 
-        // NEW -> ASSIGNED
         if (old == WorkOrderStatus.NEW) {
 
             wo.setStatus(
@@ -625,9 +676,6 @@ public class WorkOrderService {
         WorkOrder saved =
                 workOrderRepository.save(wo);
 
-        // ---------------------------------------------------
-        // HISTORY
-        // ---------------------------------------------------
         if (old != saved.getStatus()) {
 
             saveHistory(
@@ -638,9 +686,6 @@ public class WorkOrderService {
             );
         }
 
-        // ---------------------------------------------------
-        // NOTIFICATION
-        // ---------------------------------------------------
         if (reassigned) {
 
             notificationService
@@ -652,10 +697,10 @@ public class WorkOrderService {
         return toResponse(saved);
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // DELETE
-    // MANAGER ONLY — controller enforces role
-    // -------------------------------------------------------
+    // =======================================================
+
     @Transactional
     public void deleteWorkOrder(Long id) {
 
@@ -669,9 +714,9 @@ public class WorkOrderService {
         workOrderRepository.deleteById(id);
     }
 
-    // -------------------------------------------------------
-    // PRIVATE HELPERS
-    // -------------------------------------------------------
+    // =======================================================
+    // FIND
+    // =======================================================
 
     private WorkOrder findOrThrow(Long id) {
 
@@ -683,6 +728,10 @@ public class WorkOrderService {
                         )
                 );
     }
+
+    // =======================================================
+    // EDITABLE CHECK
+    // =======================================================
 
     private void assertEditable(
             WorkOrder wo) {
@@ -698,6 +747,10 @@ public class WorkOrderService {
         }
     }
 
+    // =======================================================
+    // SITE VALIDATION
+    // =======================================================
+
     private void validateSiteBelongsToCustomer(
             Site site,
             Customer customer) {
@@ -705,7 +758,9 @@ public class WorkOrderService {
         if (site.getCustomer() == null
                 || !site.getCustomer()
                 .getId()
-                .equals(customer.getId())) {
+                .equals(
+                        customer.getId()
+                )) {
 
             throw new IllegalArgumentException(
                     "Site does not belong to the selected customer"
@@ -713,18 +768,24 @@ public class WorkOrderService {
         }
     }
 
+    // =======================================================
+    // TECHNICIAN
+    // =======================================================
+
     private User resolveTechnician(
             Long userId) {
 
         User user =
-                userRepository.findById(userId)
+                userRepository
+                        .findById(userId)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Assignee not found"
                                 )
                         );
 
-        if (user.getRole() != Role.TECHNICIAN) {
+        if (user.getRole()
+                != Role.TECHNICIAN) {
 
             throw new IllegalArgumentException(
                     "Selected user is not a technician"
@@ -733,6 +794,10 @@ public class WorkOrderService {
 
         return user;
     }
+
+    // =======================================================
+    // SLA
+    // =======================================================
 
     private LocalDateTime resolveSlaDate(
             LocalDateTime explicit,
@@ -747,38 +812,55 @@ public class WorkOrderService {
         );
     }
 
-    // -------------------------------------------------------
-    // GUARDED STATE MACHINE
-    // -------------------------------------------------------
+    // =======================================================
+    // STATE MACHINE
+    // =======================================================
+
     private void validateTransition(
             WorkOrderStatus from,
             WorkOrderStatus to) {
 
-        boolean allowed =
-                switch (from) {
+        boolean allowed;
 
-                    case NEW ->
-                            to == WorkOrderStatus.ASSIGNED
-                                    || to == WorkOrderStatus.CANCELLED;
+        switch (from) {
 
-                    case ASSIGNED ->
-                            to == WorkOrderStatus.IN_PROGRESS
-                                    || to == WorkOrderStatus.CANCELLED;
+            case NEW:
+                allowed =
+                        to == WorkOrderStatus.ASSIGNED
+                                || to == WorkOrderStatus.CANCELLED;
+                break;
 
-                    case IN_PROGRESS ->
-                            to == WorkOrderStatus.ON_HOLD
-                                    || to == WorkOrderStatus.COMPLETED;
+            case ASSIGNED:
+                allowed =
+                        to == WorkOrderStatus.IN_PROGRESS
+                                || to == WorkOrderStatus.CANCELLED;
+                break;
 
-                    case ON_HOLD ->
-                            to == WorkOrderStatus.IN_PROGRESS
-                                    || to == WorkOrderStatus.CANCELLED;
+            case IN_PROGRESS:
+                allowed =
+                        to == WorkOrderStatus.ON_HOLD
+                                || to == WorkOrderStatus.COMPLETED;
+                break;
 
-                    case COMPLETED ->
-                            to == WorkOrderStatus.CLOSED;
+            case ON_HOLD:
+                allowed =
+                        to == WorkOrderStatus.IN_PROGRESS
+                                || to == WorkOrderStatus.CANCELLED;
+                break;
 
-                    case CLOSED, CANCELLED ->
-                            false;
-                };
+            case COMPLETED:
+                allowed =
+                        to == WorkOrderStatus.CLOSED;
+                break;
+
+            case CLOSED:
+            case CANCELLED:
+                allowed = false;
+                break;
+
+            default:
+                allowed = false;
+        }
 
         if (!allowed) {
 
@@ -791,9 +873,10 @@ public class WorkOrderService {
         }
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // SAVE HISTORY
-    // -------------------------------------------------------
+    // =======================================================
+
     private void saveHistory(
             WorkOrder wo,
             WorkOrderStatus from,
@@ -844,9 +927,10 @@ public class WorkOrderService {
         );
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // GENERATE WORK ORDER CODE
-    // -------------------------------------------------------
+    // =======================================================
+
     private String generateWorkOrderCode() {
 
         long next =
@@ -871,10 +955,10 @@ public class WorkOrderService {
         return code;
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // CENTRAL SEARCH
-    // customerId == null = all customers
-    // -------------------------------------------------------
+    // =======================================================
+
     private Page<WorkOrderResponse> doSearch(
             Long customerId,
             String search,
@@ -898,6 +982,8 @@ public class WorkOrderService {
                         ? search.trim()
                         : "";
 
+        // IMPORTANT:
+        // Repository expects String priority
         String p =
                 hasPriority
                         ? priority.trim().toUpperCase()
@@ -905,9 +991,10 @@ public class WorkOrderService {
 
         Page<WorkOrder> result;
 
-        // ---------------------------------------------------
+        // ===================================================
         // MANAGER / DISPATCHER
-        // ---------------------------------------------------
+        // ===================================================
+
         if (customerId == null) {
 
             if (hasSearch
@@ -992,9 +1079,9 @@ public class WorkOrderService {
 
         } else {
 
-            // ------------------------------------------------
-            // CUSTOMER PORTAL — CUSTOMER SCOPED
-            // ------------------------------------------------
+            // =================================================
+            // CUSTOMER PORTAL
+            // =================================================
 
             if (hasSearch
                     && hasStatus
@@ -1090,9 +1177,10 @@ public class WorkOrderService {
         return result.map(this::toResponse);
     }
 
-    // -------------------------------------------------------
+    // =======================================================
     // ENTITY -> RESPONSE DTO
-    // -------------------------------------------------------
+    // =======================================================
+
     public WorkOrderResponse toResponse(
             WorkOrder wo) {
 

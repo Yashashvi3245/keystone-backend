@@ -219,7 +219,11 @@ export default function App() {
 
   return (
     <div className="app">
-      <AppHeader me={me} onLogout={logout} />
+      <AppHeader
+        token={token}
+        me={me}
+        onLogout={logout}
+      />
       <AppBody token={token} me={me} onUnauth={logout} />
     </div>
   );
@@ -340,9 +344,11 @@ function LoginPage({
 // ─────────────────────────────────────────────
 
 function AppHeader({
+  token,
   me,
   onLogout,
 }: {
+  token: string;
   me: LoginResult;
   onLogout: () => void;
 }) {
@@ -356,7 +362,9 @@ function AppHeader({
         </span>
       </div>
 
-      <div className="header-actions">
+      <div className="header-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <NotificationBell token={token} onUnauth={onLogout} />
+
         <button
           className="btn btn-ghost btn-sm"
           onClick={onLogout}
@@ -365,6 +373,199 @@ function AppHeader({
         </button>
       </div>
     </header>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────
+
+function NotificationBell({
+  token,
+  onUnauth,
+}: {
+  token: string;
+  onUnauth: () => void;
+}) {
+  const [notifications, setNotifications] =
+    useState<Notification[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErr("");
+
+      const data = await api<Notification[]>(
+        "/notifications",
+        token
+      );
+
+      setNotifications(data || []);
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : String(e);
+
+      if (msg.includes("401") || msg.includes("403")) {
+        onUnauth();
+      } else {
+        setErr("Failed to load notifications.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token, onUnauth]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function markAsRead(id: number) {
+    try {
+      await api<Notification>(
+        `/notifications/${id}/read`,
+        token,
+        { method: "PATCH" }
+      );
+
+      setNotifications((items) =>
+        items.map((n) =>
+          n.id === id ? { ...n, read: true } : n
+        )
+      );
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : String(e);
+
+      if (msg.includes("401") || msg.includes("403")) {
+        onUnauth();
+      } else {
+        setErr("Could not mark notification as read.");
+      }
+    }
+  }
+
+  const unreadCount = notifications.filter(
+    (n) => !n.read
+  ).length;
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        onClick={() => {
+          setOpen((value) => !value);
+          setErr("");
+        }}
+        aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
+        style={{ position: "relative" }}
+      >
+        🔔 Notifications
+        {unreadCount > 0 && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minWidth: 20,
+              height: 20,
+              padding: "0 5px",
+              marginLeft: 6,
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 700,
+              background: "#d32f2f",
+              color: "white",
+            }}
+          >
+            {unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div
+          className="card"
+          style={{
+            position: "absolute",
+            right: 0,
+            top: "calc(100% + 8px)",
+            width: 360,
+            maxWidth: "calc(100vw - 32px)",
+            zIndex: 1000,
+            padding: 16,
+          }}
+        >
+          <div className="flex justify-between items-center mb-8">
+            <strong>Notifications</strong>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+
+          {err && (
+            <div className="alert alert-error mb-8">
+              {err}
+            </div>
+          )}
+
+          {notifications.length === 0 ? (
+            <div className="empty-state" style={{ padding: 20 }}>
+              No notifications.
+            </div>
+          ) : (
+            <div style={{ maxHeight: 420, overflowY: "auto" }}>
+              {notifications.map((n) => (
+                <div
+                  key={n.id}
+                  style={{
+                    padding: "12px 0",
+                    borderBottom: "1px solid #e0e4ea",
+                    background: n.read ? "transparent" : "#f7f9fc",
+                  }}
+                >
+                  <div
+                    className="text-sm"
+                    style={{
+                      fontWeight: n.read ? 400 : 600,
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {n.message}
+                  </div>
+
+                  <div
+                    className="text-sm text-muted"
+                    style={{ marginTop: 5 }}
+                  >
+                    {fmt(n.createdAt)}
+                  </div>
+
+                  {!n.read && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      style={{ marginTop: 8 }}
+                      onClick={() => void markAsRead(n.id)}
+                    >
+                      Mark as read
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
