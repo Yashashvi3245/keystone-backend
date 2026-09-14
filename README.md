@@ -1,4 +1,4 @@
-# KEYSTONE — Field Service Management Platform
+# KEYSTONE
 
 KEYSTONE is a Java full-stack field-service management platform built for managing customers, sites, work orders, technicians, parts, time logs, SLA tracking, notifications, dashboards, and customer self-service.
 
@@ -11,7 +11,27 @@ The platform supports four roles:
 
 ---
 
-## 1. Features
+## 1. Live Application
+
+### Frontend
+
+https://keystone-frontend-9wlj.onrender.com
+
+### Backend API
+
+https://keystone-backend-id49.onrender.com
+
+### Swagger / OpenAPI
+
+https://keystone-backend-id49.onrender.com/swagger-ui/index.html
+
+### API Documentation
+
+https://keystone-backend-id49.onrender.com/api-docs
+
+---
+
+## 2. Features
 
 ### Authentication & Authorization
 
@@ -118,7 +138,17 @@ The system includes:
 
 ### Notifications
 
-The application supports in-app notifications for important events including technician assignments and SLA breaches.
+The application supports in-app notifications for important events including:
+
+- Technician assignments
+- SLA breaches
+
+Users can:
+
+- View notifications
+- See unread notification count
+- Refresh notifications
+- Mark notifications as read
 
 ### Dashboard
 
@@ -148,7 +178,7 @@ Customer data is isolated server-side so customers cannot access another organiz
 
 ---
 
-# 2. Technology Stack
+# 3. Technology Stack
 
 ## Backend
 
@@ -184,7 +214,7 @@ Customer data is isolated server-side so customers cannot access another organiz
 
 ---
 
-# 3. Project Structure
+# 4. Project Structure
 
 ```text
 keystone-backend/
@@ -195,29 +225,28 @@ keystone-backend/
 │   │   │   ├── config/
 │   │   │   ├── controller/
 │   │   │   ├── dto/
+│   │   │   ├── exception/
 │   │   │   ├── model/
 │   │   │   ├── repository/
 │   │   │   ├── security/
 │   │   │   └── service/
 │   │   │
 │   │   └── resources/
+│   │       ├── db/migration/
 │   │       ├── application.properties
-│   │       └── db/migration/
+│   │       └── application.properties.example
 │   │
 │   └── test/
 │
 ├── frontend/
 │   ├── src/
 │   ├── public/
-│   ├── Dockerfile
-│   ├── nginx.conf
 │   ├── package.json
-│   └── vite.config.ts
+│   ├── Dockerfile
+│   └── nginx.conf
 │
 ├── Dockerfile
 ├── docker-compose.yml
-├── .env.example
-├── .gitignore
 ├── pom.xml
 ├── mvnw
 ├── mvnw.cmd
