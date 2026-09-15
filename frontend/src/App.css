@@ -289,3 +289,16 @@ tr:hover td { background: #f9fafb; }
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .tab-btn { padding: 8px 12px; font-size: 13px; }
 }
+/* ---- Notifications dropdown ---- */
+.header .notification-panel,
+.header .notification-dropdown,
+.header .notifications-panel {
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.header .notification-panel *,
+.header .notification-dropdown *,
+.header .notifications-panel * {
+  color: inherit;
+}
