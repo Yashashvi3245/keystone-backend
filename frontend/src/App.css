@@ -290,15 +290,15 @@ tr:hover td { background: #f9fafb; }
   .tab-btn { padding: 8px 12px; font-size: 13px; }
 }
 /* ---- Notifications dropdown ---- */
-.header .notification-panel,
-.header .notification-dropdown,
-.header .notifications-panel {
-  color: var(--color-text);
-  background: var(--color-surface);
+.header .card {
+  background: #ffffff !important;
+  color: #1f2937 !important;
 }
 
-.header .notification-panel *,
-.header .notification-dropdown *,
-.header .notifications-panel * {
-  color: inherit;
+.header .card .text-sm {
+  color: #1f2937 !important;
+}
+
+.header .card .text-muted {
+  color: #6b7280 !important;
 }
